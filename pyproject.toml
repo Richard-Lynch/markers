@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "code-is-magic-markers"
-version = "0.2.0"
+version = "0.3.0"
 description = "Lightweight class introspection toolkit — define typed markers, annotate fields and methods, collect metadata via MRO-walking descriptors."
 readme = "README.md"
 license = "MIT"

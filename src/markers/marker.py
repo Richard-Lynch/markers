@@ -203,13 +203,26 @@ class Marker(metaclass=MarkerMeta):
 
         # Both have 'priority' with default 0, different mark names.
 
+    Type checking:
+        Marker constructor parameters are fully validated by type checkers
+        via PEP 681 ``dataclass_transform`` (declared in ``marker.pyi``).
+        This means ``MaxLen(limit="oops")`` is a static type error, and
+        ``MaxLen()`` flags the missing required ``limit`` parameter.
+
+        Decorator usage preserves the decorated function's type signature::
+
+            @OnSave(priority=10)
+            def validate(self) -> list[str]: ...
+            # type checkers see validate as (self) -> list[str]
+
     Class methods:
         collect(cls, target):
             Collect all members carrying this marker from ``target``.
-            Returns ``dict[str, MemberInfo]``.
-            Must be called on a subclass, not ``Marker`` itself::
+            Returns ``dict[str, MemberInfo]``. Fully typed — this is
+            the recommended way to query markers when you need static
+            type safety::
 
-                Required.collect(User)  # {'name': MemberInfo, 'email': MemberInfo}
+                Required.collect(User)  # dict[str, MemberInfo]
 
         invalidate(cls, target):
             Clear cached collection for ``target``. Useful after dynamic

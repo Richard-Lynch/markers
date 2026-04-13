@@ -15,15 +15,10 @@ Markers themselves are pure schema + factory.
     User.fields       # → dict[str, MemberInfo]
 """
 
-from __future__ import annotations
+from typing import Any
 
-from typing import TYPE_CHECKING, Any
-
-from markers.descriptors import BaseMixin, MarkerDescriptor
-from markers.marker import Marker
-
-if TYPE_CHECKING:
-    from markers.marker import MarkerMeta
+from markers.descriptors import BaseMixin, BaseMixinMeta, MarkerDescriptor
+from markers.marker import Marker, MarkerMeta
 
 __all__ = ["MarkerGroup"]
 
@@ -31,10 +26,10 @@ __all__ = ["MarkerGroup"]
 class MarkerGroupMeta(type):
     """Metaclass that auto-builds a .mixin from Marker class attributes."""
 
-    mixin: type
+    mixin: type[BaseMixin]
     _markers: dict[str, MarkerMeta]
 
-    def __new__(mcs, name: str, bases: tuple, namespace: dict, **kwargs: Any) -> type:
+    def __new__(mcs, name: str, bases: tuple, namespace: dict, **kwargs: Any) -> "MarkerGroupMeta":
         cls = super().__new__(mcs, name, bases, namespace)
 
         if name == "MarkerGroup":
@@ -61,7 +56,7 @@ class MarkerGroupMeta(type):
             mark_name = marker_cls._mark_name
             mixin_attrs[mark_name] = MarkerDescriptor(mark_name)
 
-        cls.mixin = type(f"{name}Mixin", (BaseMixin,), mixin_attrs)
+        cls.mixin = BaseMixinMeta(f"{name}Mixin", (BaseMixin,), mixin_attrs)  # type: ignore[assignment]
         cls._markers = found_markers
         return cls
 
@@ -108,9 +103,28 @@ class MarkerGroup(metaclass=MarkerGroupMeta):
 
         # FullDB.mixin has all of DB's descriptors plus 'unique' and 'check'
 
+    Type checking:
+        ``.fields``, ``.methods``, and ``.members`` are fully typed as
+        ``dict[str, MemberInfo]`` via ``BaseMixin``. Marker-specific
+        descriptors (e.g. ``.primary_key``) are dynamic and not visible
+        to type checkers. Two typed alternatives:
+
+        - Use ``Marker.collect()``::
+
+              PrimaryKey.collect(User)  # fully typed: dict[str, MemberInfo]
+
+        - Add explicit ``ClassVar`` annotations::
+
+              if TYPE_CHECKING:
+                  primary_key: ClassVar[dict[str, MemberInfo]]
+
+        Marker constructor parameters (e.g. ``MaxLen(limit=100)``) are
+        fully validated by type checkers via ``dataclass_transform``.
+
     Attributes:
-        mixin (type): The generated mixin class. Inherit from this.
+        mixin (type[BaseMixin]): The generated mixin class. Inherit from this.
         _markers (dict[str, MarkerMeta]): Mapping of attribute name to Marker class.
     """
 
+    mixin: type[BaseMixin]
     _markers: dict[str, MarkerMeta] = {}

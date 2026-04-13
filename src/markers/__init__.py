@@ -42,6 +42,22 @@ Supporting types:
     MemberInfo      Metadata about a field or method. Use .has()/.get()/.get_all().
     MemberKind      Enum: FIELD or METHOD.
     MISSING         Sentinel for fields with no default value.
+
+Type checking:
+    The library ships with PEP 561 ``py.typed`` support and type stubs.
+
+    - Marker constructor kwargs are **fully validated** by type checkers
+      (e.g. ``MaxLen(limit="oops")`` is a type error). This is powered by
+      PEP 681 ``dataclass_transform`` on the ``Marker`` metaclass.
+    - ``.fields``, ``.methods``, ``.members`` are typed as
+      ``dict[str, MemberInfo]`` on any class using a group mixin.
+    - ``Marker.collect(cls)`` is the fully-typed alternative for
+      marker-specific queries (e.g. ``Required.collect(User)``).
+    - Decorator usage preserves function signatures (``@OnSave()``
+      does not erase the decorated function's type).
+    - Marker-specific descriptors (``.primary_key``, ``.required``)
+      are dynamic and not visible to type checkers. See ``MarkerGroup``
+      docstring for typed alternatives.
 """
 
 from markers._types import MISSING, MarkerInstance, MemberInfo, MemberKind

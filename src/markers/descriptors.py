@@ -46,11 +46,33 @@ class MarkerDescriptor:
         return collector.filter(cls, self._marker_name)
 
 
-class BaseMixin:
+class BaseMixinMeta(type):
+    """Metaclass for generated mixin classes.
+
+    Used by ``MarkerGroupMeta`` to create mixin classes that inherit
+    from ``BaseMixin`` and carry ``MarkerDescriptor`` instances for
+    each marker in the group.
+    """
+
+
+class BaseMixin(metaclass=BaseMixinMeta):
     """Mixin providing fields/methods/members descriptors.
 
     Every Marker.mixin inherits from this, so any class using
     at least one marker mixin automatically gets these.
+
+    Marker-specific descriptors (e.g. ``.primary_key``, ``.required``)
+    are added dynamically by ``MarkerGroupMeta`` and work at runtime.
+    For static type checking of these descriptors, either:
+
+    - Use ``Marker.collect()``::
+
+          PrimaryKey.collect(User)  # fully typed: dict[str, MemberInfo]
+
+    - Add explicit type annotations under ``TYPE_CHECKING``::
+
+          if TYPE_CHECKING:
+              primary_key: ClassVar[dict[str, MemberInfo]]
     """
 
     fields = FieldsDescriptor()
