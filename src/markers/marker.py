@@ -246,6 +246,8 @@ class Marker(metaclass=MarkerMeta):
             raise TypeError(
                 "collect() must be called on a Marker subclass, e.g. Required.collect(User), not Marker.collect(User)"
             )
+        if not isinstance(target, type):
+            raise TypeError(f"collect() expects a class, got {type(target).__name__} instance")
         return collector.filter(target, cls._mark_name)
 
     @classmethod
@@ -279,6 +281,8 @@ class Marker(metaclass=MarkerMeta):
                 "collect_markers() must be called on a Marker subclass, "
                 "e.g. Required.collect_markers(User), not Marker.collect_markers(User)"
             )
+        if not isinstance(target, type):
+            raise TypeError(f"collect_markers() expects a class, got {type(target).__name__} instance")
         mark_name = cls._mark_name
         members = collector.filter(target, mark_name)
         return CollectResult({name: info.get_marker(mark_name) for name, info in members.items()})

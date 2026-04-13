@@ -787,6 +787,55 @@ class TestRegistry:
             names[cls.__name__] = list(cls.required.keys())
         assert names == {"A": ["x"], "B": ["y"]}
 
+    def test_abstract_intermediate_falls_through(self):
+        class Base(Registry):
+            pass
+
+        class Middle(Base, abstract=True):
+            pass
+
+        class Leaf(Middle):
+            pass
+
+        assert Leaf in Base.subclasses()
+        assert not hasattr(Middle, "_registry") or "_registry" not in vars(Middle)
+
+    def test_multiple_registry_bases(self):
+        class RegA(Registry):
+            pass
+
+        class RegB(Registry):
+            pass
+
+        class Both(RegA, RegB):
+            pass
+
+        assert Both in RegA.subclasses()
+        assert Both in RegB.subclasses()
+
+    def test_all_proxy_repr(self):
+        class Base(Registry):
+            pass
+
+        class _Sub1(Base):
+            pass
+
+        class _Sub2(Base):
+            pass
+
+        proxy = Base.all
+        r = repr(proxy)
+        assert "Base" in r
+        assert "2 subclasses" in r
+
+    def test_collect_rejects_instance(self):
+        with pytest.raises(TypeError, match="expects a class"):
+            Required.collect("not a class")  # type: ignore[arg-type]
+
+    def test_collect_markers_rejects_instance(self):
+        with pytest.raises(TypeError, match="expects a class"):
+            Required.collect_markers("not a class")  # type: ignore[arg-type]
+
 
 # ===================================================================
 # Multiple groups
