@@ -1,5 +1,10 @@
 # markers
 
+[![CI](https://github.com/Richard-Lynch/markers/actions/workflows/ci.yml/badge.svg)](https://github.com/Richard-Lynch/markers/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/code-is-magic-markers)](https://pypi.org/project/code-is-magic-markers/)
+[![Python](https://img.shields.io/pypi/pyversions/code-is-magic-markers)](https://pypi.org/project/code-is-magic-markers/)
+[![License](https://img.shields.io/github/license/Richard-Lynch/markers)](https://github.com/Richard-Lynch/markers/blob/main/LICENSE)
+
 Lightweight class introspection toolkit for Python. Define typed markers, annotate fields and methods, collect metadata via MRO-walking descriptors.
 
 ## Install
