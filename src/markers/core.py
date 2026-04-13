@@ -4,10 +4,31 @@ markers.core - Unified member collection and caching.
 
 from __future__ import annotations
 
+import sys
 import weakref
 from typing import get_type_hints
 
 from markers._types import MISSING, MarkerInstance, MemberInfo, MemberKind
+
+# Python 3.14+ provides annotationlib with a proper get_annotations() that
+# handles the deferred evaluation protocol (PEP 749). On older versions,
+# fall back to reading __annotations__ directly.
+if sys.version_info >= (3, 14):
+    import annotationlib
+
+    def _get_own_annotations(cls: type) -> dict[str, object]:
+        """Get own-class annotations using annotationlib (3.14+).
+
+        Uses STRING format to avoid evaluating annotations, since we only
+        need the annotation keys to determine field ownership.
+        """
+        return annotationlib.get_annotations(cls, format=annotationlib.Format.STRING)
+
+else:
+
+    def _get_own_annotations(cls: type) -> dict[str, object]:  # type: ignore[misc]
+        return getattr(cls, "__annotations__", {})
+
 
 __all__: list[str] = []  # No public API — use Marker/Registry instead
 
@@ -48,9 +69,9 @@ class Collector:
             try:
                 hints = get_type_hints(klass, include_extras=True)
             except Exception:
-                hints = getattr(klass, "__annotations__", {})
+                hints = _get_own_annotations(klass)
 
-            own_names = set(getattr(klass, "__annotations__", {}).keys())
+            own_names = set(_get_own_annotations(klass).keys())
             for name in own_names:
                 if name.startswith("_"):
                     continue
