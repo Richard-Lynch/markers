@@ -12,7 +12,24 @@ _F = TypeVar("_F", bound=Callable[..., Any])
 
 __all__ = ["MISSING", "CollectResult", "MarkerInstance", "MemberInfo", "MemberKind"]
 
-MISSING = object()
+class _MissingSentinel:
+    """Sentinel for fields with no default value."""
+
+    _instance: _MissingSentinel | None = None
+
+    def __new__(cls) -> _MissingSentinel:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "MISSING"
+
+    def __bool__(self) -> bool:
+        return False
+
+
+MISSING = _MissingSentinel()
 
 
 class MemberKind(Enum):
