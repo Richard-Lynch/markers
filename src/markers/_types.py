@@ -292,26 +292,43 @@ class MemberInfo:
     def has_default(self) -> bool:
         return self.default is not MISSING
 
-    def has(self, marker_name: str) -> bool:
-        return any(m._marker_name == marker_name for m in self.markers)
+    @staticmethod
+    def _resolve_marker_name(marker: str | type) -> str:
+        """Resolve a marker name from a string or Marker class."""
+        if isinstance(marker, str):
+            return marker
+        # Accept a Marker class — extract its _mark_name
+        mark_name = getattr(marker, "_mark_name", None)
+        if mark_name is not None:
+            return mark_name
+        raise TypeError(f"Expected a string or Marker class, got {type(marker).__name__}")
 
-    def get(self, marker_name: str) -> MarkerInstance | None:
-        return next((m for m in self.markers if m._marker_name == marker_name), None)
+    def has(self, marker: str | type) -> bool:
+        """Check if a marker is present. Accepts a name or Marker class."""
+        name = self._resolve_marker_name(marker)
+        return any(m._marker_name == name for m in self.markers)
 
-    def get_marker(self, marker_name: str) -> MarkerInstance:
-        """Get the ``MarkerInstance`` matching the name, or raise.
+    def get(self, marker: str | type) -> MarkerInstance | None:
+        """Get the first matching MarkerInstance, or None. Accepts a name or Marker class."""
+        name = self._resolve_marker_name(marker)
+        return next((m for m in self.markers if m._marker_name == name), None)
+
+    def get_marker(self, marker: str | type) -> MarkerInstance:
+        """Get the matching MarkerInstance, or raise ``KeyError``.
 
         Like ``.get()`` but raises ``KeyError`` instead of returning ``None``.
-        Use when you know the marker must be present (e.g. after filtering
-        by that marker via ``collect()``).
+        Accepts a marker name string or a ``Marker`` class.
         """
-        result = next((m for m in self.markers if m._marker_name == marker_name), None)
+        name = self._resolve_marker_name(marker)
+        result = next((m for m in self.markers if m._marker_name == name), None)
         if result is None:
-            raise KeyError(f"Member {self.name!r} has no marker {marker_name!r}")
+            raise KeyError(f"Member {self.name!r} has no marker {name!r}")
         return result
 
-    def get_all(self, marker_name: str) -> list[MarkerInstance]:
-        return [m for m in self.markers if m._marker_name == marker_name]
+    def get_all(self, marker: str | type) -> list[MarkerInstance]:
+        """Get all matching MarkerInstances. Accepts a name or Marker class."""
+        name = self._resolve_marker_name(marker)
+        return [m for m in self.markers if m._marker_name == name]
 
     def __repr__(self) -> str:
         parts = [f"name={self.name!r}", f"kind={self.kind.name}"]

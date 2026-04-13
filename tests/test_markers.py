@@ -943,6 +943,30 @@ class TestMemberInfoGetMarker:
         marker = info.get_marker("max_length")
         assert marker.limit == 50
 
+    def test_has_accepts_marker_class(self):
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[Required()])
+        assert info.has(Required) is True
+        assert info.has(MaxLen) is False
+
+    def test_get_accepts_marker_class(self):
+        inst = MaxLen(limit=50)
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get(MaxLen) is inst
+        assert info.get(Required) is None
+
+    def test_get_marker_accepts_marker_class(self):
+        inst = Required()
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get_marker(Required) is inst
+        with pytest.raises(KeyError):
+            info.get_marker(MaxLen)
+
+    def test_get_all_accepts_marker_class(self):
+        inst = Required()
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get_all(Required) == [inst]
+        assert info.get_all(MaxLen) == []
+
 
 # ===================================================================
 # collect_markers
