@@ -78,8 +78,28 @@ src/markers/
 ├── __init__.py      # Public API exports
 ├── _types.py        # MarkerInstance, MemberInfo, MemberKind, MISSING
 ├── core.py          # Collector — MRO walking + caching
-├── descriptors.py   # BaseMixin + descriptor classes
+├── descriptors.py   # BaseMixin, BaseMixinMeta + descriptor classes
 ├── marker.py        # Marker + MarkerMeta
+├── marker.pyi       # Type stub — dataclass_transform for marker kwargs
 ├── groups.py        # MarkerGroup + MarkerGroupMeta
-└── registry.py      # Registry + AllProxy
+├── groups.pyi       # Type stub — mixin base class typing
+├── registry.py      # Registry + AllProxy
+└── py.typed         # PEP 561 marker
 ```
+
+## Type stubs
+
+The library uses `.pyi` stubs for `marker.py` and `groups.py` to provide
+type information that can't be expressed inline:
+
+- **`marker.pyi`** — Uses PEP 681 `dataclass_transform` on `MarkerMeta` so
+  type checkers validate marker constructor kwargs against the schema
+  annotations on each `Marker` subclass. Also exposes `__call__` and
+  `__getattr__` on `Marker` instances for decorator and attribute access.
+
+- **`groups.pyi`** — Declares `MarkerGroup.mixin = BaseMixin` so type checkers
+  accept `class User(DB.mixin):` as valid and know the class inherits
+  `BaseMixin`'s typed `.fields`, `.methods`, `.members` descriptors.
+
+When modifying `marker.py` or `groups.py`, check that the corresponding
+`.pyi` stub stays in sync.

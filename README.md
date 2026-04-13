@@ -340,6 +340,81 @@ inst.analyzer     # 'english'
 | `inst.marker_name` | `str` | The marker type name |
 | `inst.<field>` | `Any` | Access any schema field as an attribute |
 
+## Type checking
+
+The library ships with PEP 561 `py.typed` support and type stubs for full IDE integration (Pylance, Pyright, mypy).
+
+### What's typed automatically
+
+**Marker constructors** — parameters are fully validated by type checkers via [PEP 681 `dataclass_transform`](https://peps.python.org/pep-0681/). Typos, wrong types, and missing required params are all caught:
+
+```python
+class MaxLen(Marker):
+    mark = "max_length"
+    limit: int
+
+MaxLen(limit=100)          # ok
+MaxLen(limit="oops")       # type error: str is not int
+MaxLen()                   # type error: missing 'limit'
+MaxLen(limti=100)          # type error: no param 'limti'
+```
+
+**BaseMixin descriptors** — `.fields`, `.methods`, `.members` are typed as `dict[str, MemberInfo]` on any class using a group mixin. Full dict operations (`.items()`, `.keys()`, `.values()`, indexing) work without casts:
+
+```python
+class User(DB.mixin):
+    id: Annotated[int, DB.PrimaryKey()]
+
+for name, info in User.fields.items():  # (str, MemberInfo) — fully typed
+    print(info.is_field, info.has("primary_key"))
+```
+
+**Decorator signatures** — `@OnSave(priority=10)` preserves the decorated function's type. Type checkers see the original return type, not `MarkerInstance`:
+
+```python
+@Lifecycle.OnSave(priority=10)
+def validate(self) -> list[str]: ...
+
+reveal_type(User().validate())  # list[str]
+```
+
+**Registry `.all` proxy** — `.all.fields`, `.all.methods`, `.all.members`, and `.all.<marker_name>` are typed as `dict[str, list[MemberInfo]]`.
+
+**`Marker.collect()`** — always returns `dict[str, MemberInfo]`, fully typed:
+
+```python
+PrimaryKey.collect(User)  # dict[str, MemberInfo] — no type: ignore needed
+```
+
+### What's not typed automatically
+
+**Marker-specific descriptors** like `.primary_key`, `.required`, `.indexed` are added dynamically by `MarkerGroupMeta` and are not visible to type checkers. Two options:
+
+**Option A** — Use `Marker.collect()` (no annotations needed):
+
+```python
+# Instead of User.primary_key, use:
+PrimaryKey.collect(User)  # fully typed: dict[str, MemberInfo]
+```
+
+**Option B** — Add explicit `ClassVar` annotations (opt-in per class):
+
+```python
+from typing import TYPE_CHECKING, ClassVar
+
+class User(DB.mixin):
+    if TYPE_CHECKING:
+        primary_key: ClassVar[dict[str, MemberInfo]]
+        indexed: ClassVar[dict[str, MemberInfo]]
+
+    id: Annotated[int, DB.PrimaryKey()]
+    email: Annotated[str, DB.Indexed(unique=True)]
+
+User.primary_key  # now typed as dict[str, MemberInfo]
+```
+
+The `TYPE_CHECKING` guard ensures these annotations don't affect runtime behavior — the actual values come from the dynamically-installed `MarkerDescriptor` instances.
+
 ## How collection works
 
 When you access a descriptor like `User.fields` or `User.required`, the library:

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-13
+
+### Added
+
+- PEP 681 `dataclass_transform` support — marker constructor parameters (`MaxLen(limit=100)`) are fully validated by type checkers (Pylance, Pyright, mypy). Typos, wrong types, and missing required params are caught statically.
+- Type stubs (`marker.pyi`, `groups.pyi`) for full IDE integration
+- `BaseMixinMeta` metaclass for generated mixin classes
+- `.fields`, `.methods`, `.members` are now fully typed as `dict[str, MemberInfo]` on any class using a group mixin
+- Decorator usage (`@OnSave(priority=10)`) preserves the decorated function's type signature
+- Type checking example (`examples/type_check_example.py`) demonstrating all typed patterns
+- "Type checking" section in README documenting what's typed and escape hatches for dynamic descriptors
+
+### Changed
+
+- `MarkerInstance.__call__` signature uses `TypeVar` to preserve decorated function types
+- `MarkerGroupMeta.__new__` return type narrowed to `MarkerGroupMeta` (was `type`)
+- `MarkerGroup.mixin` typed as `type[BaseMixin]` (was `type`)
+- Generated mixin classes now use `BaseMixinMeta` metaclass (was `type`)
+- Removed `from __future__ import annotations` from `groups.py` for better type checker resolution
+
 ## [0.2.0] - 2026-04-13
 
 ### Added

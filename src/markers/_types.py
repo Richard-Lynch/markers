@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum, auto
-from typing import Any
+from typing import Any, TypeVar
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 __all__ = ["MISSING", "MarkerInstance", "MemberInfo", "MemberKind"]
 
@@ -69,8 +71,12 @@ class MarkerInstance:
         """The marker type name (e.g. 'required', 'on_save')."""
         return self._marker_name
 
-    def __call__(self, fn: Callable[..., Any]) -> Callable[..., Any]:
-        """Decorate a function, attaching this MarkerInstance."""
+    def __call__(self, fn: _F) -> _F:
+        """Decorate a function, attaching this MarkerInstance.
+
+        The decorated function's type signature is preserved — type checkers
+        will see the original return type, not ``MarkerInstance``.
+        """
         if not callable(fn):
             raise TypeError(f"MarkerInstance '{self._marker_name}' expected a callable, got {type(fn).__name__}")
         markers: list[MarkerInstance] = list(getattr(fn, "_markers", []))
