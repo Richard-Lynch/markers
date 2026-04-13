@@ -4,11 +4,11 @@ Full usage example for markers.
 Public API: Marker, MarkerGroup, Registry.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
-from markers import Marker, MarkerGroup, Registry
 from pydantic import ValidationError
 
+from markers import Marker, MarkerGroup, Registry
 
 # ===================================================================
 # 1. Define markers
@@ -18,25 +18,43 @@ print("=" * 60)
 print("1. Define Markers")
 print("=" * 60)
 
+
 # Schema-less
-class Required(Marker): pass
-class Unique(Marker): pass
-class Filterable(Marker): pass
-class Sortable(Marker): pass
-class Facetable(Marker): pass
+class Required(Marker):
+    pass
+
+
+class Unique(Marker):
+    pass
+
+
+class Filterable(Marker):
+    pass
+
+
+class Sortable(Marker):
+    pass
+
+
+class Facetable(Marker):
+    pass
+
 
 # With schema
 class MaxLen(Marker):
     mark = "max_length"
     limit: int
 
+
 class Searchable(Marker):
     boost: float = 1.0
     analyzer: str = "standard"
 
+
 class Range(Marker):
     min: float
     max: float
+
 
 class ForeignKey(Marker):
     mark = "foreign_key"
@@ -44,25 +62,32 @@ class ForeignKey(Marker):
     column: str
     on_delete: str = "CASCADE"
 
+
 class PrimaryKey(Marker):
     mark = "primary_key"
     auto_increment: bool = True
 
+
 class Indexed(Marker):
     unique: bool = False
 
+
 class Pattern(Marker):
     regex: str
+
 
 # Intermediate base with shared schema
 class LifecycleMarker(Marker):
     priority: int = 0
 
+
 class OnSave(LifecycleMarker):
     mark = "on_save"
 
+
 class OnDelete(LifecycleMarker):
     mark = "on_delete"
+
 
 print(f"Required:        {Required}")
 print(f"Searchable:      {Searchable}")
@@ -106,7 +131,7 @@ try:
 except ValidationError as e:
     errors.append(f"Type: {e}")
 
-print(f"\nValidation errors:")
+print("\nValidation errors:")
 for err in errors:
     print(f"  {err}")
 
@@ -119,11 +144,13 @@ print("\n" + "=" * 60)
 print("3. MarkerGroup")
 print("=" * 60)
 
+
 class DB(MarkerGroup):
     PrimaryKey = PrimaryKey
     Indexed = Indexed
     Unique = Unique
     ForeignKey = ForeignKey
+
 
 class Search(MarkerGroup):
     Searchable = Searchable
@@ -131,15 +158,18 @@ class Search(MarkerGroup):
     Sortable = Sortable
     Facetable = Facetable
 
+
 class Validation(MarkerGroup):
     Required = Required
     MaxLen = MaxLen
     Pattern = Pattern
     Range = Range
 
+
 class Lifecycle(MarkerGroup):
     OnSave = OnSave
     OnDelete = OnDelete
+
 
 print(f"DB markers:         {list(DB._markers.keys())}")
 print(f"Search markers:     {list(Search._markers.keys())}")
@@ -155,9 +185,11 @@ print("\n" + "=" * 60)
 print("4. Models")
 print("=" * 60)
 
+
 class TimestampMixin:
     created_at: Annotated[str, DB.Indexed(), Search.Sortable()]
     updated_at: Annotated[str, DB.Indexed()]
+
 
 class SoftDeleteMixin:
     deleted_at: Annotated[str | None, DB.Indexed()] = None
@@ -232,13 +264,13 @@ user.name = ""
 user.email = "test@test.com"
 
 errs = []
-for name, info in save_hooks:
+for name, _info in save_hooks:
     errs.extend(getattr(user, name)())
 print(f"\nSave errors: {errs}")
 
 user.name = "Alice"
 errs = []
-for name, info in save_hooks:
+for name, _info in save_hooks:
     errs.extend(getattr(user, name)())
 print(f"Save fixed:  {errs}")
 
@@ -250,6 +282,7 @@ print(f"Save fixed:  {errs}")
 print("\n" + "=" * 60)
 print("6. Registry")
 print("=" * 60)
+
 
 class Entity(  # type: ignore[misc]  # multiple group mixins resolve at runtime
     TimestampMixin,
@@ -284,34 +317,34 @@ class Invoice(Entity):
 print(f"Registered: {[c.__name__ for c in Entity.subclasses()]}")
 
 # --- .all gathers into dict[str, list[MemberInfo]] ---
-print(f"\nEntity.all.fields:")
+print("\nEntity.all.fields:")
 for name, infos in Entity.all.fields.items():
     owners = [i.owner.__name__ for i in infos]
     print(f"  {name}: {owners}")
 
-print(f"\nEntity.all.methods:")
+print("\nEntity.all.methods:")
 for name, infos in Entity.all.methods.items():
     owners = [i.owner.__name__ for i in infos]
     print(f"  {name}: {owners}")
 
-print(f"\nEntity.all.required:")
+print("\nEntity.all.required:")
 for name, infos in Entity.all.required.items():
     owners = [i.owner.__name__ for i in infos]
     print(f"  {name}: defined on {owners}")
 
-print(f"\nEntity.all.foreign_key:")
+print("\nEntity.all.foreign_key:")
 for name, infos in Entity.all.foreign_key.items():
     for info in infos:
         fk = info.get("foreign_key")
         print(f"  {info.owner.__name__}.{name} -> {fk.table}.{fk.column} ({fk.on_delete})")
 
-print(f"\nEntity.all.searchable:")
+print("\nEntity.all.searchable:")
 for name, infos in Entity.all.searchable.items():
     for info in infos:
         print(f"  {info.owner.__name__}.{name}: boost={info.get('searchable').boost}")
 
 # --- subclasses() for per-class iteration ---
-print(f"\nPer-class iteration:")
+print("\nPer-class iteration:")
 for cls in Entity.subclasses():
     print(f"  {cls.__name__}.required: {list(cls.required.keys())}")
 

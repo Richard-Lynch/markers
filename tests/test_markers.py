@@ -91,6 +91,7 @@ class Lifecycle(MarkerGroup):
 
 # State machine markers for CollectResult tests
 
+
 class _SMState(Marker):
     mark = "state"
     initial: bool = False
@@ -995,7 +996,7 @@ class TestCollectResult:
 
         collector.invalidate(M)
         result = Required.collect_markers(M)
-        name, marker = result.get_first()
+        name, _marker = result.get_first()
         assert name in result
 
     def test_get_first_raises_on_empty(self):

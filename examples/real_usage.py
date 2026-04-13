@@ -8,38 +8,44 @@ maps from the annotated classes.
 
 from typing import Annotated, Any
 
-
-from markers import Marker, MarkerGroup, Registry, MemberInfo, MISSING
-
+from markers import Marker, MarkerGroup, Registry
 
 # ===================================================================
 # 1. Define markers
 # ===================================================================
+
 
 # Column constraints
 class PrimaryKey(Marker):
     mark = "primary_key"
     auto_increment: bool = True
 
+
 class NotNull(Marker):
     mark = "not_null"
+
 
 class Unique(Marker):
     pass
 
+
 class Default(Marker):
     value: Any
 
+
 class Check(Marker):
     expression: str
+
 
 class Indexed(Marker):
     unique: bool = False
     name: str = ""
 
+
 class ColumnType(Marker):
     mark = "column_type"
     sql_type: str
+
 
 # Relationships
 class ForeignKey(Marker):
@@ -49,15 +55,18 @@ class ForeignKey(Marker):
     on_delete: str = "CASCADE"
     on_update: str = "NO ACTION"
 
+
 class OneToOne(Marker):
     mark = "one_to_one"
     to: str
     foreign_key: str
 
+
 class OneToMany(Marker):
     mark = "one_to_many"
     to: str
     foreign_key: str
+
 
 class ManyToMany(Marker):
     mark = "many_to_many"
@@ -65,6 +74,7 @@ class ManyToMany(Marker):
     through: str
     local_key: str = "id"
     remote_key: str = "id"
+
 
 # Table-level config
 class TableName(Marker):
@@ -75,6 +85,7 @@ class TableName(Marker):
 # ===================================================================
 # 2. MarkerGroup
 # ===================================================================
+
 
 class DB(MarkerGroup):
     PrimaryKey = PrimaryKey
@@ -94,6 +105,7 @@ class DB(MarkerGroup):
 # ===================================================================
 # 3. Define models
 # ===================================================================
+
 
 class Entity(DB.mixin, Registry):
     id: Annotated[int, DB.PrimaryKey(), DB.ColumnType(sql_type="SERIAL")]
@@ -123,7 +135,13 @@ class Post(Entity):
     author_id: Annotated[int, DB.NotNull(), DB.ForeignKey(to="User"), DB.Indexed(), DB.ColumnType(sql_type="INTEGER")]
     title: Annotated[str, DB.NotNull(), DB.ColumnType(sql_type="VARCHAR(200)")]
     body: Annotated[str, DB.NotNull(), DB.ColumnType(sql_type="TEXT")]
-    status: Annotated[str, DB.NotNull(), DB.Default(value="draft"), DB.Check(expression="status IN ('draft','published','archived')"), DB.ColumnType(sql_type="VARCHAR(20)")] = "draft"
+    status: Annotated[
+        str,
+        DB.NotNull(),
+        DB.Default(value="draft"),
+        DB.Check(expression="status IN ('draft','published','archived')"),
+        DB.ColumnType(sql_type="VARCHAR(20)"),
+    ] = "draft"
     published_at: Annotated[str | None, DB.ColumnType(sql_type="TIMESTAMP")] = None
 
     # Relationships
@@ -151,6 +169,7 @@ class Role(Entity):
 # ===================================================================
 # 4. Extraction functions
 # ===================================================================
+
 
 def get_table_name(cls: type) -> str:
     """Derive SQL table name from class or TableName marker."""
@@ -236,29 +255,35 @@ def extract_relationships(cls: type) -> dict[str, list[dict[str, Any]]]:
     for name, info in cls.fields.items():
         oto = info.get("one_to_one")
         if oto:
-            rels["one_to_one"].append({
-                "field": name,
-                "to": oto.to,
-                "foreign_key": oto.foreign_key,
-            })
+            rels["one_to_one"].append(
+                {
+                    "field": name,
+                    "to": oto.to,
+                    "foreign_key": oto.foreign_key,
+                }
+            )
 
         otm = info.get("one_to_many")
         if otm:
-            rels["one_to_many"].append({
-                "field": name,
-                "to": otm.to,
-                "foreign_key": otm.foreign_key,
-            })
+            rels["one_to_many"].append(
+                {
+                    "field": name,
+                    "to": otm.to,
+                    "foreign_key": otm.foreign_key,
+                }
+            )
 
         mtm = info.get("many_to_many")
         if mtm:
-            rels["many_to_many"].append({
-                "field": name,
-                "to": mtm.to,
-                "through": mtm.through,
-                "local_key": mtm.local_key,
-                "remote_key": mtm.remote_key,
-            })
+            rels["many_to_many"].append(
+                {
+                    "field": name,
+                    "to": mtm.to,
+                    "through": mtm.through,
+                    "local_key": mtm.local_key,
+                    "remote_key": mtm.remote_key,
+                }
+            )
 
     return rels
 
@@ -269,29 +294,31 @@ def extract_junction_tables(registry_cls: type) -> list[dict[str, Any]]:
     seen = set()
 
     for cls in registry_cls.subclasses():
-        for name, info in cls.fields.items():
+        for _name, info in cls.fields.items():
             mtm = info.get("many_to_many")
             if mtm and mtm.through not in seen:
                 seen.add(mtm.through)
-                tables.append({
-                    "table": mtm.through,
-                    "columns": [
-                        {
-                            "name": f"{get_table_name(cls).rstrip('s')}_id",
-                            "sql_type": "INTEGER",
-                            "references": get_table_name(cls),
-                        },
-                        {
-                            "name": f"{mtm.to.lower()}_id",
-                            "sql_type": "INTEGER",
-                            "references": get_table_name_for(mtm.to),
-                        },
-                    ],
-                    "primary_key": [
-                        f"{get_table_name(cls).rstrip('s')}_id",
-                        f"{mtm.to.lower()}_id",
-                    ],
-                })
+                tables.append(
+                    {
+                        "table": mtm.through,
+                        "columns": [
+                            {
+                                "name": f"{get_table_name(cls).rstrip('s')}_id",
+                                "sql_type": "INTEGER",
+                                "references": get_table_name(cls),
+                            },
+                            {
+                                "name": f"{mtm.to.lower()}_id",
+                                "sql_type": "INTEGER",
+                                "references": get_table_name_for(mtm.to),
+                            },
+                        ],
+                        "primary_key": [
+                            f"{get_table_name(cls).rstrip('s')}_id",
+                            f"{mtm.to.lower()}_id",
+                        ],
+                    }
+                )
 
     return tables
 

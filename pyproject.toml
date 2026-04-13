@@ -94,6 +94,9 @@ ignore = [
     "B017",   # pytest.raises(Exception) — acceptable in tests
     "B018",   # useless expression — used in tests for attribute access checks
 ]
+"examples/**" = [
+    "E701",   # one-line class definitions — compact style for marker examples
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["markers"]

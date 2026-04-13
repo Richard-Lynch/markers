@@ -144,9 +144,7 @@ class CollectResult(dict):
         """
         if len(self) != 1:
             ctx = f" for {label!r}" if label else ""
-            raise ValueError(
-                f"Expected exactly 1 result{ctx}, found {len(self)}: {list(self.keys())}"
-            )
+            raise ValueError(f"Expected exactly 1 result{ctx}, found {len(self)}: {list(self.keys())}")
         name = next(iter(self))
         return name, self[name]
 
@@ -166,9 +164,7 @@ class CollectResult(dict):
         Returns a new ``CollectResult`` containing only entries where
         ``predicate(marker)`` returns ``True``.
         """
-        return CollectResult(
-            {name: marker for name, marker in self.items() if predicate(marker)}
-        )
+        return CollectResult({name: marker for name, marker in self.items() if predicate(marker)})
 
     def names(self) -> list[str]:
         """Return all member names as a list."""

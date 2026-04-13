@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Annotated, ClassVar
 
 from markers import Marker, MarkerGroup, MemberInfo, Registry
 
-
 # -- Markers --
 
 
@@ -66,6 +65,7 @@ class SM(MarkerGroup):
 # 1. BaseMixin descriptors: always typed
 # ============================================================
 
+
 class User(DB.mixin):
     id: Annotated[int, DB.PrimaryKey()]
     email: Annotated[str, DB.Indexed(unique=True)]
@@ -80,7 +80,7 @@ members: dict[str, MemberInfo] = User.members
 for field_name, info in User.fields.items():
     print(f"{field_name}: is_field={info.is_field}, has_default={info.has_default}")
 
-for field_name in User.fields.keys():
+for field_name in User.fields:
     print(field_name)
 
 for info in User.fields.values():
@@ -92,9 +92,9 @@ for info in User.fields.values():
 # ============================================================
 
 id_info = User.fields["id"]
-print(id_info.has("primary_key"))       # bool
-print(id_info.get("primary_key"))       # MarkerInstance | None
-print(id_info.get_all("primary_key"))   # list[MarkerInstance]
+print(id_info.has("primary_key"))  # bool
+print(id_info.get("primary_key"))  # MarkerInstance | None
+print(id_info.get_all("primary_key"))  # list[MarkerInstance]
 
 
 # ============================================================
@@ -114,6 +114,7 @@ for field_name, info in PrimaryKey.collect(User).items():
 # 4. Marker-specific descriptors: option B — ClassVar annotations
 #    Opt-in explicit typing for descriptor access on the class.
 # ============================================================
+
 
 class Product(DB.mixin):
     if TYPE_CHECKING:
@@ -135,6 +136,7 @@ for field_name, info in Product.primary_key.items():
 # ============================================================
 # 5. Decorator preserves function type
 # ============================================================
+
 
 class Task(SM.mixin):
     title: Annotated[str, SM.Transition(source=["backlog"], target="todo")]
@@ -158,6 +160,7 @@ result_bool: bool = task.complete()
 # ============================================================
 # 6. Registry .all proxy: dict[str, list[MemberInfo]]
 # ============================================================
+
 
 class Entity(DB.mixin, Registry):
     id: Annotated[int, DB.PrimaryKey()]

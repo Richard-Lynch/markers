@@ -281,9 +281,7 @@ class Marker(metaclass=MarkerMeta):
             )
         mark_name = cls._mark_name
         members = collector.filter(target, mark_name)
-        return CollectResult(
-            {name: info.get_marker(mark_name) for name, info in members.items()}
-        )
+        return CollectResult({name: info.get_marker(mark_name) for name, info in members.items()})
 
     @classmethod
     def invalidate(cls, target: type) -> None:
