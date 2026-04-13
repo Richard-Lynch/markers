@@ -1217,7 +1217,7 @@ class TestCollectResult:
 
         collector.invalidate(M)
         result = Required.collect_markers(M)
-        markers_list = result.markers()
+        markers_list = result.values_list()
         assert len(markers_list) == 1
         assert markers_list[0].marker_name == "required"
 

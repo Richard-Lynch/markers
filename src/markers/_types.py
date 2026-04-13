@@ -6,9 +6,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum, auto
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+_M = TypeVar("_M")
 
 __all__ = ["MISSING", "CollectResult", "MarkerInstance", "MemberInfo", "MemberKind"]
 
@@ -144,7 +145,7 @@ class MarkerInstance:
         defaults), otherwise returns the raw kwargs.
         """
         if self._params is not None:
-            return self._params.model_dump()
+            return dict(self._params.model_dump())
         return dict(self._kwargs)
 
     def __eq__(self, other: object) -> bool:
@@ -160,8 +161,12 @@ class MarkerInstance:
         return f"{self._marker_name}({', '.join(parts)})"
 
 
-class CollectResult(dict):
+class CollectResult(dict[str, _M], Generic[_M]):
     """Dict subclass returned by ``Marker.collect_markers()``.
+
+    Generic over the value type — ``CollectResult[MarkerInstance]`` for
+    ``collect_markers()``. Type checkers using ``Self`` in the
+    ``collect_markers()`` stub can infer typed marker param access.
 
     Maps member names to their ``MarkerInstance`` for the collected marker.
     Provides convenience methods for common patterns like uniqueness checks
@@ -185,8 +190,8 @@ class CollectResult(dict):
         finals = results.where(lambda m: m.final)
     """
 
-    def get_one(self, label: str = "") -> tuple[str, MarkerInstance]:
-        """Return the single ``(name, marker)`` entry.
+    def get_one(self, label: str = "") -> tuple[str, _M]:
+        """Return the single ``(name, value)`` entry.
 
         Raises ``ValueError`` if there are zero or more than one entries.
         The optional *label* is included in the error message for context.
@@ -208,8 +213,8 @@ class CollectResult(dict):
         name, _ = self.get_one(label)
         return name
 
-    def get_first(self, label: str = "") -> tuple[str, MarkerInstance]:
-        """Return the first ``(name, marker)`` entry.
+    def get_first(self, label: str = "") -> tuple[str, _M]:
+        """Return the first ``(name, value)`` entry.
 
         Raises ``ValueError`` if the result is empty.
         The optional *label* is included in the error message for context.
@@ -225,19 +230,19 @@ class CollectResult(dict):
         name, _ = self.get_first(label)
         return name
 
-    def where(self, predicate: Callable[[MarkerInstance], bool]) -> CollectResult:
-        """Filter entries by a predicate on the ``MarkerInstance``.
+    def where(self, predicate: Callable[[_M], bool]) -> CollectResult[_M]:
+        """Filter entries by a predicate on the value.
 
         Returns a new ``CollectResult`` containing only entries where
-        ``predicate(marker)`` returns ``True``.
+        ``predicate(value)`` returns ``True``.
         """
-        return CollectResult({name: marker for name, marker in self.items() if predicate(marker)})
+        return CollectResult({name: val for name, val in self.items() if predicate(val)})
 
-    def sorted_by(self, attr: str, *, reverse: bool = False) -> list[tuple[str, MarkerInstance]]:
-        """Sort entries by a marker attribute value.
+    def sorted_by(self, attr: str, *, reverse: bool = False) -> list[tuple[str, _M]]:
+        """Sort entries by a value attribute.
 
-        Returns a list of ``(name, marker)`` pairs sorted by the value of
-        *attr* on each ``MarkerInstance``.
+        Returns a list of ``(name, value)`` pairs sorted by the value of
+        *attr* on each entry.
 
         Example::
 
@@ -251,8 +256,8 @@ class CollectResult(dict):
         """Return all member names as a list."""
         return list(self.keys())
 
-    def markers(self) -> list[MarkerInstance]:
-        """Return all ``MarkerInstance`` objects as a list."""
+    def values_list(self) -> list[_M]:
+        """Return all values as a list."""
         return list(self.values())
 
 
@@ -330,7 +335,7 @@ class MemberInfo:
         if isinstance(marker, str):
             return marker
         # Accept a Marker class — extract its _mark_name
-        mark_name = getattr(marker, "_mark_name", None)
+        mark_name: str | None = getattr(marker, "_mark_name", None)
         if mark_name is not None:
             return mark_name
         raise TypeError(f"Expected a string or Marker class, got {type(marker).__name__}")
