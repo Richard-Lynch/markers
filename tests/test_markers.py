@@ -860,6 +860,36 @@ class TestMultipleGroups:
         assert M.fields["name"].get("searchable").boost == 2.0
         assert M.methods["hook"].get("on_save").priority == 1
 
+    def test_combine_creates_single_mixin(self):
+        Combined = MarkerGroup.combine(DB, Search, Validation, Lifecycle)
+
+        class M(Combined):
+            id: Annotated[int, DB.PrimaryKey()]
+            name: Annotated[str, Validation.Required(), Search.Searchable(boost=2.0)]
+
+            @OnSave(priority=1)
+            def hook(self):
+                pass
+
+        collector.invalidate(M)
+        assert "id" in M.primary_key
+        assert "name" in M.required
+        assert "name" in M.searchable
+        assert "hook" in M.on_save
+        assert M.fields["name"].get("searchable").boost == 2.0
+
+    def test_combine_has_base_descriptors(self):
+        Combined = MarkerGroup.combine(DB, Validation)
+
+        class M(Combined):
+            id: Annotated[int, DB.PrimaryKey()]
+            name: str
+
+        collector.invalidate(M)
+        assert "id" in M.fields
+        assert "name" in M.fields
+        assert "id" in M.members
+
 
 # ===================================================================
 # Edge cases

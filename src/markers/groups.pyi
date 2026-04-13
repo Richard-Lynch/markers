@@ -16,3 +16,5 @@ class MarkerGroupMeta(type):
 class MarkerGroup(metaclass=MarkerGroupMeta):
     mixin: TypeAlias = BaseMixin
     _markers: dict[str, MarkerMeta]
+    @staticmethod
+    def combine(*groups: type) -> type[BaseMixin]: ...
