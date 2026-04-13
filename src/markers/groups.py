@@ -37,7 +37,18 @@ class MarkerGroupMeta(type):
 
         # Find all Marker subclasses assigned as class attributes
         found_markers: dict[str, MarkerMeta] = {}
+
+        # Support list-based syntax: markers = [Required, MaxLen]
+        marker_list = namespace.get("markers")
+        if isinstance(marker_list, (list, tuple)):
+            for val in marker_list:
+                if isinstance(val, type) and issubclass(val, Marker) and val is not Marker:
+                    found_markers[val.__name__] = val  # type: ignore[assignment]
+
+        # Also support attribute-based syntax: Required = Required
         for attr, val in namespace.items():
+            if attr == "markers":
+                continue
             if isinstance(val, type) and issubclass(val, Marker) and val is not Marker:
                 found_markers[attr] = val  # type: ignore[assignment]
 

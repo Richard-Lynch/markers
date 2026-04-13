@@ -366,6 +366,34 @@ class TestMarkerGroup:
         inst = DB.PrimaryKey()
         assert inst.marker_name == "primary_key"
 
+    def test_list_based_group_definition(self):
+        class ListGroup(MarkerGroup):
+            markers = [Required, MaxLen]
+
+        assert "Required" in ListGroup._markers
+        assert "MaxLen" in ListGroup._markers
+        assert hasattr(ListGroup.mixin, "required")
+        assert hasattr(ListGroup.mixin, "max_length")
+
+    def test_list_based_group_works_on_class(self):
+        class LG(MarkerGroup):
+            markers = [Required, Searchable]
+
+        class M(LG.mixin):
+            name: Annotated[str, Required(), Searchable(boost=3.0)]
+
+        collector.invalidate(M)
+        assert "name" in M.required
+        assert M.fields["name"].get(Searchable).boost == 3.0
+
+    def test_mixed_list_and_attribute_syntax(self):
+        class MixedGroup(MarkerGroup):
+            markers = [Required]
+            MaxLen = MaxLen
+
+        assert "Required" in MixedGroup._markers
+        assert "MaxLen" in MixedGroup._markers
+
 
 # ===================================================================
 # Collection — fields
