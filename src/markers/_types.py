@@ -19,18 +19,37 @@ class MemberKind(Enum):
 
 
 class MarkerInstance:
-    """A specific usage of a Marker with validated parameters.
+    """A validated usage of a Marker with parameters.
 
-    Internal state is stored in underscore-prefixed slots to avoid
-    collisions with schema field names on ``__getattr__`` lookup.
+    Created by calling a ``Marker`` subclass (e.g. ``MaxLen(limit=100)``).
+    You don't instantiate this directly — the Marker metaclass does it.
 
-    Access the marker type name via ``.marker_name``.
-    Access schema fields directly as attributes: ``inst.boost``, ``inst.limit``.
+    Accessing parameters::
 
-    Also callable as a decorator::
+        inst = Searchable(boost=2.5, analyzer="english")
+        inst.marker_name  # 'searchable' — the marker type name
+        inst.boost        # 2.5 — schema field access
+        inst.analyzer     # 'english'
+
+    As ``Annotated`` metadata::
+
+        name: Annotated[str, Required(), MaxLen(limit=100)]
+
+    As a method decorator (stacks with multiple decorators)::
 
         @OnSave(priority=1)
         def validate(self): ...
+
+    Attributes:
+        marker_name (str): The marker type name (e.g. 'required', 'on_save').
+        <schema fields>: Access any schema field as an attribute.
+
+    The ``repr`` shows the marker name and all parameters::
+
+        >>> MaxLen(limit=100)
+        max_length(limit=100)
+        >>> Required()
+        required()
     """
 
     __slots__ = ("_kwargs", "_marker_name", "_params")
@@ -87,7 +106,42 @@ class MarkerInstance:
 
 
 class MemberInfo:
-    """Metadata about a single class member (field or method)."""
+    """Metadata about a single class member (field or method).
+
+    Every member collected from a class (via ``.fields``, ``.methods``,
+    ``.members``, or a marker descriptor) is represented as a ``MemberInfo``.
+
+    Attributes:
+        name (str): The member name (e.g. 'email', 'validate').
+        kind (MemberKind): ``MemberKind.FIELD`` or ``MemberKind.METHOD``.
+        type (type | None): The base type (unwrapped from ``Annotated``).
+            ``None`` for methods.
+        owner (type | None): The class that defined this member.
+        default (Any): The default value, or ``MISSING`` if none.
+        markers (list[MarkerInstance]): All markers attached to this member.
+
+    Properties:
+        is_field (bool): ``True`` if ``kind == MemberKind.FIELD``.
+        is_method (bool): ``True`` if ``kind == MemberKind.METHOD``.
+        has_default (bool): ``True`` if a default value exists (not ``MISSING``).
+
+    Querying markers::
+
+        info = User.fields["name"]
+
+        info.has("required")          # True if marker is present
+        info.get("max_length")        # MarkerInstance or None
+        info.get("max_length").limit  # access validated params
+        info.get_all("required")      # list of all matching MarkerInstances
+
+    Methods:
+        has(marker_name: str) -> bool:
+            Check if a marker with the given name is present.
+        get(marker_name: str) -> MarkerInstance | None:
+            Get the first ``MarkerInstance`` matching the name, or ``None``.
+        get_all(marker_name: str) -> list[MarkerInstance]:
+            Get all ``MarkerInstance`` objects matching the name.
+    """
 
     __slots__ = ("default", "kind", "markers", "name", "owner", "type")
 

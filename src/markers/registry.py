@@ -86,27 +86,65 @@ class AllDescriptor:
 
 
 class Registry(BaseMixin):
-    """Base class that tracks all subclasses.
+    """Track subclasses and query metadata across all of them.
 
-    Inherits BaseMixin so ``fields``, ``methods``, and ``members``
-    are always available.
+    Inherit from ``Registry`` alongside group mixins to get automatic
+    subclass registration and cross-class aggregation via ``.all``.
 
-    Per-class access works as usual::
+    Defining a registry::
 
-        User.fields          # dict[str, MemberInfo]
-        User.required        # dict[str, MemberInfo]
+        class Entity(DB.mixin, Validation.mixin, Registry):
+            id: Annotated[int, DB.PrimaryKey()]
 
-    Cross-class access via ``.all`` gathers into lists by member name::
+        class User(Entity):
+            name: Annotated[str, Validation.Required()]
 
-        Entity.all.fields    # dict[str, list[MemberInfo]]
-        Entity.all.required  # dict[str, list[MemberInfo]]
+        class Post(Entity):
+            title: Annotated[str, Validation.Required()]
 
-    Each list entry has ``.owner`` so you know which class it came from.
+    Listing subclasses::
 
-    Use ``subclasses()`` for direct iteration::
+        Entity.subclasses()  # [User, Post]
+
+    Per-class access (same ``dict[str, MemberInfo]`` as always)::
+
+        User.required   # {'name': MemberInfo(...)}
+        Post.required   # {'title': MemberInfo(...)}
+        User.fields     # all fields including inherited 'id'
+
+    Cross-class access via ``.all`` returns ``dict[str, list[MemberInfo]]``,
+    gathering from all registered subclasses::
+
+        Entity.all.required
+        # {'name': [MemberInfo(owner=User)], 'title': [MemberInfo(owner=Post)]}
+
+        Entity.all.fields
+        # {'id': [MemberInfo(owner=User), MemberInfo(owner=Post)],
+        #  'name': [MemberInfo(owner=User)], 'title': [MemberInfo(owner=Post)]}
+
+    Each ``MemberInfo`` has ``.owner`` so you know which class it came from.
+
+    Iterating subclasses with the per-class API::
 
         for cls in Entity.subclasses():
             print(cls.__name__, list(cls.required.keys()))
+        # User ['name']
+        # Post ['title']
+
+    The ``.all`` proxy supports any marker name as an attribute::
+
+        Entity.all.primary_key   # aggregated primary keys
+        Entity.all.foreign_key   # aggregated foreign keys
+        Entity.all.members       # all members from all subclasses
+        Entity.all.fields        # all fields from all subclasses
+        Entity.all.methods       # all methods from all subclasses
+
+    Methods:
+        subclasses() -> list[type]:
+            Return all registered subclasses of this registry class.
+
+    Attributes:
+        all (AllProxy): Proxy for cross-subclass aggregation queries.
     """
 
     _registry: dict[str, type] = {}

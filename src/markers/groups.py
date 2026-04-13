@@ -67,22 +67,50 @@ class MarkerGroupMeta(type):
 
 
 class MarkerGroup(metaclass=MarkerGroupMeta):
-    """Base class for grouping related markers.
+    """Bundle related markers and produce a ``.mixin`` for model classes.
 
-    Subclass and assign Marker subclasses as class attributes::
+    This is how marker descriptors get onto your classes. Subclass and
+    assign ``Marker`` subclasses as class attributes. The group auto-generates
+    a ``.mixin`` class that provides:
+
+    - A **marker descriptor** per marker (e.g. ``.primary_key``, ``.indexed``)
+      that returns ``dict[str, MemberInfo]`` of members carrying that marker.
+    - **``.fields``**, **``.methods``**, **``.members``** from ``BaseMixin``
+      — always available on any class using at least one group mixin.
+
+    Defining a group::
 
         class DB(MarkerGroup):
             PrimaryKey = PrimaryKey
             Indexed = Indexed
+            ForeignKey = ForeignKey
 
-    The class automatically gets a ``.mixin`` that provides:
-    - A MarkerDescriptor for each marker (e.g. ``.primary_key``, ``.indexed``)
-    - ``fields``, ``methods``, ``members`` from BaseMixin
+    Using the mixin::
 
-    Groups can inherit from other groups to compose::
+        class User(DB.mixin):
+            id: Annotated[int, DB.PrimaryKey()]
+            email: Annotated[str, DB.Indexed(unique=True)]
+
+        User.primary_key  # {'id': MemberInfo(...)}
+        User.indexed      # {'email': MemberInfo(...)}
+        User.fields       # all fields
+
+    Multiple group mixins compose naturally::
+
+        class User(DB.mixin, Validation.mixin, Search.mixin):
+            ...
+
+    Groups inherit from other groups to compose marker sets::
 
         class FullDB(DB):
-            ForeignKey = ForeignKey
+            Unique = Unique
+            Check = Check
+
+        # FullDB.mixin has all of DB's descriptors plus 'unique' and 'check'
+
+    Attributes:
+        mixin (type): The generated mixin class. Inherit from this.
+        _markers (dict[str, MarkerMeta]): Mapping of attribute name to Marker class.
     """
 
     _markers: dict[str, MarkerMeta] = {}
