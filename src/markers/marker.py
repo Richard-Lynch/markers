@@ -133,16 +133,45 @@ class MarkerMeta(type):
 class Marker(metaclass=MarkerMeta):
     """Base class for defining markers.
 
-    Subclass to create a marker. Add typed fields for a validated schema,
-    or leave empty for a schema-less marker.
+    Subclass to create a marker. The class body **is** the pydantic schema:
+    typed fields become validated parameters. Leave empty for a schema-less
+    marker (a simple tag with no parameters).
+
+    Calling a Marker subclass returns a ``MarkerInstance`` with validated
+    params. Use it as ``Annotated[]`` metadata or as a method decorator.
 
     Class attributes:
-        mark: Optional explicit marker name. Defaults to lowercased class name.
+        mark (str, optional): Explicit marker name used for querying
+            (e.g. ``User.required``). Defaults to the lowercased class name.
 
-    Markers are pure schema + factory. Use ``MarkerGroup`` to bundle
-    markers and create mixins for your model classes.
+    Schema markers (with typed fields)::
 
-    Intermediate bases work naturally for shared fields::
+        class MaxLen(Marker):
+            mark = "max_length"   # queried as .max_length
+            limit: int            # required param
+            strict: bool = False  # optional param with default
+
+        MaxLen(limit=100)         # -> MarkerInstance
+        MaxLen()                  # ValidationError: 'limit' required
+        MaxLen(limit=100, x=1)   # ValidationError: extra fields forbidden
+
+    Schema-less markers (no params)::
+
+        class Required(Marker): pass
+
+        Required()       # -> MarkerInstance (empty)
+        Required(x=1)   # TypeError: no parameters accepted
+
+    As Annotated metadata::
+
+        name: Annotated[str, Required(), MaxLen(limit=100)]
+
+    As method decorator::
+
+        @OnSave(priority=10)
+        def validate(self): ...
+
+    Intermediate bases share schema fields across related markers::
 
         class LifecycleMarker(Marker):
             priority: int = 0
@@ -153,7 +182,21 @@ class Marker(metaclass=MarkerMeta):
         class OnDelete(LifecycleMarker):
             mark = "on_delete"
 
-        # OnSave and OnDelete both have priority, with different mark names.
+        # Both have 'priority' with default 0, different mark names.
+
+    Class methods:
+        collect(cls, target):
+            Collect all members carrying this marker from ``target``.
+            Returns ``dict[str, MemberInfo]``.
+            Must be called on a subclass, not ``Marker`` itself::
+
+                Required.collect(User)  # {'name': MemberInfo, 'email': MemberInfo}
+
+        invalidate(cls, target):
+            Clear cached collection for ``target``. Useful after dynamic
+            class modification. Can be called on any subclass or ``Marker``::
+
+                Marker.invalidate(User)
     """
 
     _mark_name: str
