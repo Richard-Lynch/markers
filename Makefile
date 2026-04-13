@@ -1,10 +1,10 @@
-.PHONY: help venv deps deps\:resolve deps\:install deps\:update test test\:cov lint format typecheck check build clean
+.PHONY: help venv deps deps-resolve deps-install deps-update test test-cov lint format typecheck check build clean
 
 VENV := .venv
 UV := uv
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_:-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # --- Environment ---
 
@@ -13,40 +13,40 @@ venv: ## Create virtual environment
 
 # --- Dependencies ---
 
-deps\:resolve: ## Resolve and lock dependencies
+deps-resolve: ## Resolve and lock dependencies
 	$(UV) lock
 
-deps\:install: ## Install project with dev extras into venv
+deps-install: ## Install project with dev extras into venv
 	$(UV) sync --extra dev
 
-deps\:update: ## Update all dependencies and re-lock
+deps-update: ## Update all dependencies and re-lock
 	$(UV) lock --upgrade
 	$(UV) sync --extra dev
 
-deps: deps\:install ## Alias for deps:install
+deps: deps-install ## Alias: install dependencies
 
 # --- Testing ---
 
 test: ## Run tests
 	$(UV) run pytest tests/ -v
 
-test\:cov: ## Run tests with coverage
+test-cov: ## Run tests with coverage
 	$(UV) run pytest tests/ --cov=markers --cov-report=term-missing --cov-report=html
 
 # --- Linting & Formatting ---
 
 lint: ## Run linters (ruff check + format check)
-	$(UV) run ruff check src/ tests/
-	$(UV) run ruff format --check src/ tests/
+	$(UV) run ruff check src/ tests/ examples/
+	$(UV) run ruff format --check src/ tests/ examples/
 
 format: ## Auto-format code
-	$(UV) run ruff format src/ tests/
-	$(UV) run ruff check --fix src/ tests/
+	$(UV) run ruff format src/ tests/ examples/
+	$(UV) run ruff check --fix src/ tests/ examples/
 
 # --- Type Checking ---
 
-typecheck: ## Run type checker
-	$(UV) run mypy src/markers/ --ignore-missing-imports
+typecheck: ## Run mypy on library and examples
+	$(UV) run mypy src/markers/ examples/ --ignore-missing-imports
 
 # --- All Checks ---
 
