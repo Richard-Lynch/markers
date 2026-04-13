@@ -94,15 +94,15 @@ print(f"save.priority: {save_inst.priority}")
 
 errors = []
 try:
-    Required(oops=True)
+    Required(oops=True)  # type: ignore[call-arg]
 except TypeError as e:
     errors.append(f"No params: {e}")
 try:
-    MaxLen()
+    MaxLen()  # type: ignore[call-arg]
 except ValidationError as e:
     errors.append(f"Missing: {e}")
 try:
-    MaxLen(limit="nope")
+    MaxLen(limit="nope")  # type: ignore[arg-type]
 except ValidationError as e:
     errors.append(f"Type: {e}")
 
@@ -164,7 +164,7 @@ class SoftDeleteMixin:
     is_deleted: Annotated[bool, Search.Filterable()] = False
 
 
-class User(
+class User(  # type: ignore[misc]  # multiple group mixins resolve at runtime
     TimestampMixin,
     SoftDeleteMixin,
     DB.mixin,
@@ -251,7 +251,7 @@ print("\n" + "=" * 60)
 print("6. Registry")
 print("=" * 60)
 
-class Entity(
+class Entity(  # type: ignore[misc]  # multiple group mixins resolve at runtime
     TimestampMixin,
     SoftDeleteMixin,
     DB.mixin,
