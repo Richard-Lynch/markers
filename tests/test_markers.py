@@ -1088,6 +1088,49 @@ class TestCollectResult:
         with pytest.raises(ValueError, match="Expected at least 1"):
             result.get_first()
 
+    def test_get_first_label_in_error(self):
+        result = CollectResult()
+        with pytest.raises(ValueError, match="final"):
+            result.get_first(label="final")
+
+    def test_get_one_name(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert result.get_one_name() == "name"
+
+    def test_get_first_name(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert result.get_first_name() in result
+
+    def test_get_one_truncates_large_key_list(self):
+        # Build a CollectResult with 15 entries
+        result = CollectResult({f"field_{i}": Required() for i in range(15)})
+        with pytest.raises(ValueError, match="5 more"):
+            result.get_one()
+
+    def test_sorted_by(self):
+        collector.invalidate(_SMachineFull)
+        transitions = _SMTransition.collect_markers(_SMachineFull)
+        # Transitions have a 'target' attribute
+        sorted_items = transitions.sorted_by("target")
+        targets = [marker.target for _, marker in sorted_items]
+        assert targets == sorted(targets)
+
+    def test_sorted_by_reverse(self):
+        collector.invalidate(_SMachineFull)
+        transitions = _SMTransition.collect_markers(_SMachineFull)
+        sorted_items = transitions.sorted_by("target", reverse=True)
+        targets = [marker.target for _, marker in sorted_items]
+        assert targets == sorted(targets, reverse=True)
+
     def test_where_filters_by_predicate(self):
         all_states = _SMState.collect_markers(_SMachine)
         assert len(all_states) == 3

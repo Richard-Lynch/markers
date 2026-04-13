@@ -193,19 +193,37 @@ class CollectResult(dict):
         """
         if len(self) != 1:
             ctx = f" for {label!r}" if label else ""
-            raise ValueError(f"Expected exactly 1 result{ctx}, found {len(self)}: {list(self.keys())}")
+            keys = list(self.keys())
+            if len(keys) > 10:
+                shown = keys[:10]
+                keys_str = f"{shown} ... ({len(keys) - 10} more)"
+            else:
+                keys_str = str(keys)
+            raise ValueError(f"Expected exactly 1 result{ctx}, found {len(self)}: {keys_str}")
         name = next(iter(self))
         return name, self[name]
 
-    def get_first(self) -> tuple[str, MarkerInstance]:
+    def get_one_name(self, label: str = "") -> str:
+        """Return the single member name. Raises ``ValueError`` if != 1 entry."""
+        name, _ = self.get_one(label)
+        return name
+
+    def get_first(self, label: str = "") -> tuple[str, MarkerInstance]:
         """Return the first ``(name, marker)`` entry.
 
         Raises ``ValueError`` if the result is empty.
+        The optional *label* is included in the error message for context.
         """
         if not self:
-            raise ValueError("Expected at least 1 result, found 0")
+            ctx = f" for {label!r}" if label else ""
+            raise ValueError(f"Expected at least 1 result{ctx}, found 0")
         name = next(iter(self))
         return name, self[name]
+
+    def get_first_name(self, label: str = "") -> str:
+        """Return the first member name. Raises ``ValueError`` if empty."""
+        name, _ = self.get_first(label)
+        return name
 
     def where(self, predicate: Callable[[MarkerInstance], bool]) -> CollectResult:
         """Filter entries by a predicate on the ``MarkerInstance``.
@@ -214,6 +232,20 @@ class CollectResult(dict):
         ``predicate(marker)`` returns ``True``.
         """
         return CollectResult({name: marker for name, marker in self.items() if predicate(marker)})
+
+    def sorted_by(self, attr: str, *, reverse: bool = False) -> list[tuple[str, MarkerInstance]]:
+        """Sort entries by a marker attribute value.
+
+        Returns a list of ``(name, marker)`` pairs sorted by the value of
+        *attr* on each ``MarkerInstance``.
+
+        Example::
+
+            hooks = OnSave.collect_markers(cls).sorted_by("priority")
+            for name, marker in hooks:
+                getattr(instance, name)()
+        """
+        return sorted(self.items(), key=lambda pair: getattr(pair[1], attr), reverse=reverse)
 
     def names(self) -> list[str]:
         """Return all member names as a list."""
