@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-13
+
+### Added
+
+- `Marker.collect_markers()` — returns `CollectResult` mapping names to `MarkerInstance` directly, eliminating `.get()` + None-check boilerplate
+- `CollectResult` — generic dict subclass with `.where()`, `.get_one()`, `.get_first()`, `.sorted_by()`, `.get_one_name()`, `.get_first_name()`, `.names()`, `.values_list()`
+- `MemberInfo.get_marker()` — like `.get()` but raises `KeyError` instead of returning `None`
+- `MemberInfo.has()` / `.get()` / `.get_marker()` / `.get_all()` now accept `Marker` classes alongside strings — `info.has(Required)` catches typos at import time
+- `MarkerGroup.combine(*groups)` — creates a single mixin from multiple groups, eliminating `# type: ignore[misc]` for multi-group inheritance
+- `MarkerInstance.__eq__` — structural equality comparing marker name and parameters
+- `MarkerInstance.as_dict()` — public parameter introspection (replaces private `_params.model_dump()`)
+- List-based group definition syntax — `markers = [Required, MaxLen]` as alternative to `Required = Required`
+- `CollectResult` is generic — `CollectResult[Self]` in stubs gives typed marker param access
+- `registry.pyi` stub — fixes MRO/metaclass conflicts when combining group mixins with `Registry`
+
+### Changed
+
+- `Marker.collect()` now returns `CollectResult[MemberInfo]` (was plain `dict`) — same `.where()`, `.get_one()` etc. methods
+- `MISSING` sentinel is now a proper singleton class with `__repr__` returning `"MISSING"` and `__bool__` returning `False`
+- `AllProxy` has a useful `__repr__` showing registry name and subclass count
+- `groups.pyi` uses `TypeAlias` for `mixin` so mypy accepts `DB.mixin` as a base class (was 29 mypy errors)
+- Examples consolidated into a single comprehensive file showcasing all features
+- Makefile: fixed broken `deps` target, help regex shows colon targets, lint/typecheck include examples/
+
+### Fixed
+
+- `classmethod`/`staticmethod`/`property` markers were silently lost during collection — now both the decorator and collector unwrap descriptors
+- Registry abstract intermediate classes incorrectly captured leaf registrations — leaves now register with nearest non-abstract ancestor
+- Multiple registry inheritance only registered with the first base — now registers with all registry roots
+- `collect()` / `collect_markers()` now reject instances with a clear error message (was confusing traceback)
+- `get_one()` error message truncates key list for large results (was unreadable with 50+ entries)
+
 ## [0.3.0] - 2026-04-13
 
 ### Added
