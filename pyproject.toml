@@ -1,0 +1,133 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "code-is-magic-markers"
+version = "0.1.0"
+description = "Lightweight class introspection toolkit — define typed markers, annotate fields and methods, collect metadata via MRO-walking descriptors."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Richie" },
+]
+keywords = [
+    "introspection",
+    "metadata",
+    "annotations",
+    "markers",
+    "descriptors",
+    "registry",
+    "typing",
+    "pydantic",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "tox>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Richard-Lynch/markers"
+Repository = "https://github.com/Richard-Lynch/markers"
+Changelog = "https://github.com/Richard-Lynch/markers/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/markers"]
+
+# --- Ruff ---
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "N805",   # first argument of a method should be named 'self' — metaclass uses mcs/cls
+    "B010",   # do not call setattr with a constant attribute value — intentional
+    "UP007",  # use X | Y for unions — keep compatibility
+    "SIM108", # use ternary operator — readability preference
+    "SIM105", # contextlib.suppress — readability preference
+    "RUF012", # mutable class variables — intentional for _registry etc
+    "TC001",  # move import into TYPE_CHECKING — keep simple imports
+    "TC003",  # move stdlib import into TYPE_CHECKING — keep simple imports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "B017",   # pytest.raises(Exception) — acceptable in tests
+    "B018",   # useless expression — used in tests for attribute access checks
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["markers"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# --- Mypy ---
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+# --- Pytest ---
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+# --- Coverage ---
+
+[tool.coverage.run]
+source = ["markers"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
