@@ -37,7 +37,18 @@ class MarkerGroupMeta(type):
 
         # Find all Marker subclasses assigned as class attributes
         found_markers: dict[str, MarkerMeta] = {}
+
+        # Support list-based syntax: markers = [Required, MaxLen]
+        marker_list = namespace.get("markers")
+        if isinstance(marker_list, (list, tuple)):
+            for val in marker_list:
+                if isinstance(val, type) and issubclass(val, Marker) and val is not Marker:
+                    found_markers[val.__name__] = val  # type: ignore[assignment]
+
+        # Also support attribute-based syntax: Required = Required
         for attr, val in namespace.items():
+            if attr == "markers":
+                continue
             if isinstance(val, type) and issubclass(val, Marker) and val is not Marker:
                 found_markers[attr] = val  # type: ignore[assignment]
 
@@ -128,3 +139,30 @@ class MarkerGroup(metaclass=MarkerGroupMeta):
 
     mixin: type[BaseMixin]
     _markers: dict[str, MarkerMeta] = {}
+
+    @staticmethod
+    def combine(*groups: type) -> type:
+        """Create a single mixin combining multiple ``MarkerGroup`` mixins.
+
+        Eliminates the need for multiple mixin inheritance (and the
+        ``# type: ignore[misc]`` that comes with it)::
+
+            # Instead of:
+            class User(DB.mixin, Validation.mixin, Search.mixin):  # type: ignore[misc]
+                ...
+
+            # Write:
+            AppMixin = MarkerGroup.combine(DB, Validation, Search)
+            class User(AppMixin):
+                ...
+
+        The returned mixin carries all descriptors from all groups.
+        """
+        attrs: dict[str, Any] = {}
+        for group in groups:
+            markers: dict[str, MarkerMeta] = getattr(group, "_markers", {})
+            for marker_cls in markers.values():
+                mark_name = marker_cls._mark_name
+                attrs[mark_name] = MarkerDescriptor(mark_name)
+        names = "+".join(g.__name__ for g in groups)
+        return BaseMixinMeta(f"Combined({names})", (BaseMixin,), attrs)

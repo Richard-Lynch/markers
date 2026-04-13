@@ -6,13 +6,32 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum, auto
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+_M = TypeVar("_M")
 
-__all__ = ["MISSING", "MarkerInstance", "MemberInfo", "MemberKind"]
+__all__ = ["MISSING", "CollectResult", "MarkerInstance", "MemberInfo", "MemberKind"]
 
-MISSING = object()
+
+class _MissingSentinel:
+    """Sentinel for fields with no default value."""
+
+    _instance: _MissingSentinel | None = None
+
+    def __new__(cls) -> _MissingSentinel:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "MISSING"
+
+    def __bool__(self) -> bool:
+        return False
+
+
+MISSING = _MissingSentinel()
 
 
 class MemberKind(Enum):
@@ -76,10 +95,26 @@ class MarkerInstance:
 
         The decorated function's type signature is preserved — type checkers
         will see the original return type, not ``MarkerInstance``.
+
+        Supports decorating ``classmethod``, ``staticmethod``, and
+        ``property`` descriptors — markers are attached to the inner function.
         """
+        # Unwrap descriptor wrappers to attach markers to the inner function
+        if isinstance(fn, (classmethod, staticmethod)):
+            inner = fn.__func__
+            markers: list[MarkerInstance] = list(getattr(inner, "_markers", []))
+            markers.append(self)
+            inner._markers = markers  # type: ignore[attr-defined]
+            return fn
+        if isinstance(fn, property):
+            inner = fn.fget  # type: ignore[assignment]
+            markers = list(getattr(inner, "_markers", []))
+            markers.append(self)
+            inner._markers = markers  # type: ignore[attr-defined]
+            return fn  # type: ignore[return-value]
         if not callable(fn):
             raise TypeError(f"MarkerInstance '{self._marker_name}' expected a callable, got {type(fn).__name__}")
-        markers: list[MarkerInstance] = list(getattr(fn, "_markers", []))
+        markers = list(getattr(fn, "_markers", []))
         markers.append(self)
         fn._markers = markers  # type: ignore[attr-defined]
         return fn
@@ -102,13 +137,127 @@ class MarkerInstance:
             return kwargs[key]
         raise AttributeError(f"MarkerInstance '{self._marker_name}' has no parameter '{key}'")
 
-    def __repr__(self) -> str:
+    def as_dict(self) -> dict[str, Any]:
+        """Return all marker parameters as a plain dict.
+
+        Uses the pydantic model's ``model_dump()`` if available (includes
+        defaults), otherwise returns the raw kwargs.
+        """
         if self._params is not None:
-            data = self._params.model_dump()
-        else:
-            data = self._kwargs
+            return dict(self._params.model_dump())
+        return dict(self._kwargs)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, MarkerInstance):
+            return NotImplemented
+        return self._marker_name == other._marker_name and self.as_dict() == other.as_dict()
+
+    __hash__ = None  # type: ignore[assignment]  # mutable — unhashable
+
+    def __repr__(self) -> str:
+        data = self.as_dict()
         parts = [f"{k}={v!r}" for k, v in data.items()]
         return f"{self._marker_name}({', '.join(parts)})"
+
+
+class CollectResult(dict[str, _M], Generic[_M]):
+    """Dict subclass returned by ``Marker.collect_markers()``.
+
+    Generic over the value type — ``CollectResult[MarkerInstance]`` for
+    ``collect_markers()``. Type checkers using ``Self`` in the
+    ``collect_markers()`` stub can infer typed marker param access.
+
+    Maps member names to their ``MarkerInstance`` for the collected marker.
+    Provides convenience methods for common patterns like uniqueness checks
+    and predicate filtering.
+
+    Usage::
+
+        results = SM.State.collect_markers(cls)
+
+        # Iterate with full marker access (no None checks)
+        for name, marker in results.items():
+            if marker.initial: ...
+
+        # Assert exactly one match
+        name, marker = results.where(lambda m: m.initial).get_one()
+
+        # Assert at least one match
+        name, marker = results.where(lambda m: m.final).get_first()
+
+        # Filter by predicate
+        finals = results.where(lambda m: m.final)
+    """
+
+    def get_one(self, label: str = "") -> tuple[str, _M]:
+        """Return the single ``(name, value)`` entry.
+
+        Raises ``ValueError`` if there are zero or more than one entries.
+        The optional *label* is included in the error message for context.
+        """
+        if len(self) != 1:
+            ctx = f" for {label!r}" if label else ""
+            keys = list(self.keys())
+            if len(keys) > 10:
+                shown = keys[:10]
+                keys_str = f"{shown} ... ({len(keys) - 10} more)"
+            else:
+                keys_str = str(keys)
+            raise ValueError(f"Expected exactly 1 result{ctx}, found {len(self)}: {keys_str}")
+        name = next(iter(self))
+        return name, self[name]
+
+    def get_one_name(self, label: str = "") -> str:
+        """Return the single member name. Raises ``ValueError`` if != 1 entry."""
+        name, _ = self.get_one(label)
+        return name
+
+    def get_first(self, label: str = "") -> tuple[str, _M]:
+        """Return the first ``(name, value)`` entry.
+
+        Raises ``ValueError`` if the result is empty.
+        The optional *label* is included in the error message for context.
+        """
+        if not self:
+            ctx = f" for {label!r}" if label else ""
+            raise ValueError(f"Expected at least 1 result{ctx}, found 0")
+        name = next(iter(self))
+        return name, self[name]
+
+    def get_first_name(self, label: str = "") -> str:
+        """Return the first member name. Raises ``ValueError`` if empty."""
+        name, _ = self.get_first(label)
+        return name
+
+    def where(self, predicate: Callable[[_M], bool]) -> CollectResult[_M]:
+        """Filter entries by a predicate on the value.
+
+        Returns a new ``CollectResult`` containing only entries where
+        ``predicate(value)`` returns ``True``.
+        """
+        return CollectResult({name: val for name, val in self.items() if predicate(val)})
+
+    def sorted_by(self, attr: str, *, reverse: bool = False) -> list[tuple[str, _M]]:
+        """Sort entries by a value attribute.
+
+        Returns a list of ``(name, value)`` pairs sorted by the value of
+        *attr* on each entry.
+
+        Example::
+
+            hooks = OnSave.collect_markers(cls).sorted_by("priority")
+            for name, marker in hooks:
+                getattr(instance, name)()
+        """
+        return sorted(self.items(), key=lambda pair: getattr(pair[1], attr), reverse=reverse)
+
+    def names(self) -> list[str]:
+        """Return all member names as a list."""
+        return list(self.keys())
+
+    def values_list(self) -> list[_M]:
+        """Return all values as a list."""
+        return list(self.values())
 
 
 class MemberInfo:
@@ -179,14 +328,43 @@ class MemberInfo:
     def has_default(self) -> bool:
         return self.default is not MISSING
 
-    def has(self, marker_name: str) -> bool:
-        return any(m._marker_name == marker_name for m in self.markers)
+    @staticmethod
+    def _resolve_marker_name(marker: str | type) -> str:
+        """Resolve a marker name from a string or Marker class."""
+        if isinstance(marker, str):
+            return marker
+        # Accept a Marker class — extract its _mark_name
+        mark_name: str | None = getattr(marker, "_mark_name", None)
+        if mark_name is not None:
+            return mark_name
+        raise TypeError(f"Expected a string or Marker class, got {type(marker).__name__}")
 
-    def get(self, marker_name: str) -> MarkerInstance | None:
-        return next((m for m in self.markers if m._marker_name == marker_name), None)
+    def has(self, marker: str | type) -> bool:
+        """Check if a marker is present. Accepts a name or Marker class."""
+        name = self._resolve_marker_name(marker)
+        return any(m._marker_name == name for m in self.markers)
 
-    def get_all(self, marker_name: str) -> list[MarkerInstance]:
-        return [m for m in self.markers if m._marker_name == marker_name]
+    def get(self, marker: str | type) -> MarkerInstance | None:
+        """Get the first matching MarkerInstance, or None. Accepts a name or Marker class."""
+        name = self._resolve_marker_name(marker)
+        return next((m for m in self.markers if m._marker_name == name), None)
+
+    def get_marker(self, marker: str | type) -> MarkerInstance:
+        """Get the matching MarkerInstance, or raise ``KeyError``.
+
+        Like ``.get()`` but raises ``KeyError`` instead of returning ``None``.
+        Accepts a marker name string or a ``Marker`` class.
+        """
+        name = self._resolve_marker_name(marker)
+        result = next((m for m in self.markers if m._marker_name == name), None)
+        if result is None:
+            raise KeyError(f"Member {self.name!r} has no marker {name!r}")
+        return result
+
+    def get_all(self, marker: str | type) -> list[MarkerInstance]:
+        """Get all matching MarkerInstances. Accepts a name or Marker class."""
+        name = self._resolve_marker_name(marker)
+        return [m for m in self.markers if m._marker_name == name]
 
     def __repr__(self) -> str:
         parts = [f"name={self.name!r}", f"kind={self.kind.name}"]

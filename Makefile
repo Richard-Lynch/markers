@@ -4,7 +4,7 @@ VENV := .venv
 UV := uv
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_:-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@sed -n 's/^\([a-zA-Z_\\:-]*\):.*## \(.*\)/\1\t\2/p' $(MAKEFILE_LIST) | sed 's/\\:/:/g' | sort | awk -F '\t' '{printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # --- Environment ---
 
@@ -23,7 +23,8 @@ deps\:update: ## Update all dependencies and re-lock
 	$(UV) lock --upgrade
 	$(UV) sync --extra dev
 
-deps: deps\:install ## Alias for deps:install
+deps: ## Alias for deps:install
+	@$(MAKE) deps:install
 
 # --- Testing ---
 
@@ -36,17 +37,17 @@ test\:cov: ## Run tests with coverage
 # --- Linting & Formatting ---
 
 lint: ## Run linters (ruff check + format check)
-	$(UV) run ruff check src/ tests/
-	$(UV) run ruff format --check src/ tests/
+	$(UV) run ruff check src/ tests/ examples/
+	$(UV) run ruff format --check src/ tests/ examples/
 
 format: ## Auto-format code
-	$(UV) run ruff format src/ tests/
-	$(UV) run ruff check --fix src/ tests/
+	$(UV) run ruff format src/ tests/ examples/
+	$(UV) run ruff check --fix src/ tests/ examples/
 
 # --- Type Checking ---
 
-typecheck: ## Run type checker
-	$(UV) run mypy src/markers/ --ignore-missing-imports
+typecheck: ## Run mypy on library and examples
+	$(UV) run mypy src/markers/ examples/ --ignore-missing-imports
 
 # --- All Checks ---
 

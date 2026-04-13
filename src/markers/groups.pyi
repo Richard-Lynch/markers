@@ -1,10 +1,9 @@
-from typing import Any
+from typing import Any, TypeAlias
 
 from markers.descriptors import BaseMixin
 from markers.marker import MarkerMeta
 
 class MarkerGroupMeta(type):
-    mixin: type[BaseMixin]
     _markers: dict[str, MarkerMeta]
     def __new__(
         mcs,
@@ -15,5 +14,7 @@ class MarkerGroupMeta(type):
     ) -> MarkerGroupMeta: ...
 
 class MarkerGroup(metaclass=MarkerGroupMeta):
-    mixin = BaseMixin
+    mixin: TypeAlias = BaseMixin
     _markers: dict[str, MarkerMeta]
+    @staticmethod
+    def combine(*groups: type) -> type[BaseMixin]: ...

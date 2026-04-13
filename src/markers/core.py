@@ -96,7 +96,13 @@ class Collector:
 
             # --- Methods with _markers ---
             for attr, val in vars(klass).items():
-                method_markers: list[MarkerInstance] | None = getattr(val, "_markers", None)
+                # Unwrap descriptor wrappers to find _markers on the inner function
+                raw = val
+                if isinstance(raw, (classmethod, staticmethod)):
+                    raw = raw.__func__
+                elif isinstance(raw, property):
+                    raw = raw.fget
+                method_markers: list[MarkerInstance] | None = getattr(raw, "_markers", None)
                 if method_markers:
                     members[attr] = MemberInfo(
                         name=attr,

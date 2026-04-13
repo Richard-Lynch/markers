@@ -77,6 +77,10 @@ class AllProxy:
             raise AttributeError(marker_name)
         return self._gather(lambda sub: collector.filter(sub, marker_name))
 
+    def __repr__(self) -> str:
+        registry: dict[str, type] = getattr(self._cls, "_registry", {})
+        return f"<AllProxy for {self._cls.__name__!r} ({len(registry)} subclasses)>"
+
 
 class AllDescriptor:
     """Descriptor that returns an AllProxy bound to the registry class."""
@@ -152,14 +156,16 @@ class Registry(BaseMixin):
 
     def __init_subclass__(cls, abstract: bool = False, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not abstract:
-            cls._registry = {}
-            for base in cls.__mro__[1:]:
-                if base is Registry:
-                    break
-                if issubclass(base, Registry) and hasattr(base, "_registry"):
-                    base._registry[cls.__name__] = cls
-                    break
+        if abstract:
+            # Abstract intermediates do NOT get their own registry,
+            # so leaf classes fall through to the nearest non-abstract ancestor.
+            return
+        cls._registry = {}
+        for base in cls.__mro__[1:]:
+            if base is Registry:
+                continue
+            if issubclass(base, Registry) and "_registry" in vars(base):
+                base._registry[cls.__name__] = cls
 
     @classmethod
     def subclasses(cls) -> list[type]:

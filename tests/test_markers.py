@@ -8,7 +8,7 @@ from typing import Annotated
 
 import pytest
 
-from markers import MISSING, Marker, MarkerGroup, MemberInfo, MemberKind, Registry
+from markers import MISSING, CollectResult, Marker, MarkerGroup, MemberInfo, MemberKind, Registry
 from markers.core import collector
 
 # ===================================================================
@@ -87,6 +87,56 @@ class Validation(MarkerGroup):
 class Lifecycle(MarkerGroup):
     OnSave = OnSave
     OnDelete = OnDelete
+
+
+# State machine markers for CollectResult tests
+
+
+class _SMState(Marker):
+    mark = "state"
+    initial: bool = False
+    final: bool = False
+
+
+class _SMTransition(Marker):
+    mark = "transition"
+    source: list
+    target: str
+
+
+class _SM(MarkerGroup):
+    State = _SMState
+    Transition = _SMTransition
+
+
+class _SMachine(_SM.mixin):
+    idle: Annotated[str, _SM.State(initial=True)]
+    running: Annotated[str, _SM.State()]
+    done: Annotated[str, _SM.State(final=True)]
+
+
+class _SMachineNoInitial(_SM.mixin):
+    idle: Annotated[str, _SM.State()]
+    running: Annotated[str, _SM.State()]
+
+
+class _SMachineFull(_SM.mixin):
+    idle: Annotated[str, _SM.State(initial=True)]
+    running: Annotated[str, _SM.State()]
+    done: Annotated[str, _SM.State(final=True)]
+    error: Annotated[str, _SM.State(final=True)]
+
+    @_SM.Transition(source=["idle"], target="running")
+    def start(self):
+        pass
+
+    @_SM.Transition(source=["running"], target="done")
+    def finish(self):
+        pass
+
+    @_SM.Transition(source=["running"], target="error")
+    def fail(self):
+        pass
 
 
 # ===================================================================
@@ -250,6 +300,31 @@ class TestMarkerInstanceAttributes:
         inst = Required()
         assert repr(inst) == "required()"
 
+    def test_as_dict_with_schema(self):
+        inst = Searchable(boost=2.5)
+        d = inst.as_dict()
+        assert d == {"boost": 2.5, "analyzer": "standard"}
+
+    def test_as_dict_without_schema(self):
+        inst = Required()
+        assert inst.as_dict() == {}
+
+    def test_eq_same_marker_same_params(self):
+        assert MaxLen(limit=100) == MaxLen(limit=100)
+
+    def test_eq_same_marker_different_params(self):
+        assert MaxLen(limit=100) != MaxLen(limit=200)
+
+    def test_eq_different_marker(self):
+        assert Required() != Unique()
+
+    def test_eq_not_marker_instance(self):
+        assert Required() != "required"
+
+    def test_not_hashable(self):
+        with pytest.raises(TypeError):
+            hash(Required())
+
 
 # ===================================================================
 # MarkerGroup
@@ -290,6 +365,34 @@ class TestMarkerGroup:
         assert DB.PrimaryKey is PrimaryKey
         inst = DB.PrimaryKey()
         assert inst.marker_name == "primary_key"
+
+    def test_list_based_group_definition(self):
+        class ListGroup(MarkerGroup):
+            markers = [Required, MaxLen]
+
+        assert "Required" in ListGroup._markers
+        assert "MaxLen" in ListGroup._markers
+        assert hasattr(ListGroup.mixin, "required")
+        assert hasattr(ListGroup.mixin, "max_length")
+
+    def test_list_based_group_works_on_class(self):
+        class LG(MarkerGroup):
+            markers = [Required, Searchable]
+
+        class M(LG.mixin):
+            name: Annotated[str, Required(), Searchable(boost=3.0)]
+
+        collector.invalidate(M)
+        assert "name" in M.required
+        assert M.fields["name"].get(Searchable).boost == 3.0
+
+    def test_mixed_list_and_attribute_syntax(self):
+        class MixedGroup(MarkerGroup):
+            markers = [Required]
+            MaxLen = MaxLen
+
+        assert "Required" in MixedGroup._markers
+        assert "MaxLen" in MixedGroup._markers
 
 
 # ===================================================================
@@ -407,6 +510,41 @@ class TestCollectionMethods:
         collector.invalidate(Child)
         assert Child.methods["hook"].owner is Base
 
+    def test_classmethod_with_marker_collected(self):
+        class M(Lifecycle.mixin):
+            @OnSave(priority=5)
+            @classmethod
+            def cls_hook(cls):
+                pass
+
+        collector.invalidate(M)
+        assert "cls_hook" in M.methods
+        assert M.methods["cls_hook"].get("on_save").priority == 5
+
+    def test_staticmethod_with_marker_collected(self):
+        class M(Lifecycle.mixin):
+            @OnSave(priority=3)
+            @staticmethod
+            def static_hook():
+                pass
+
+        collector.invalidate(M)
+        assert "static_hook" in M.methods
+        assert M.methods["static_hook"].get("on_save").priority == 3
+
+    def test_marker_then_classmethod_collected(self):
+        """Marker applied before @classmethod (outer decorator)."""
+
+        class M(Lifecycle.mixin):
+            @classmethod
+            @OnSave(priority=7)
+            def hook(cls):
+                pass
+
+        collector.invalidate(M)
+        assert "hook" in M.methods
+        assert M.methods["hook"].get("on_save").priority == 7
+
 
 # ===================================================================
 # Collection — marker filtering
@@ -435,6 +573,23 @@ class TestMarkerFiltering:
         result = Required.collect(M)
         assert "name" in result
         assert "age" not in result
+
+    def test_collect_returns_collect_result(self):
+        class M(DB.mixin, Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+            age: int = 0
+
+        collector.invalidate(M)
+        result = Required.collect(M)
+        assert isinstance(result, CollectResult)
+        # CollectResult methods work on MemberInfo values
+        _name, info = result.get_first()
+        assert isinstance(info, MemberInfo)
+        assert info.has(Required)
+        # where() works with MemberInfo predicate
+        with_default = result.where(lambda info: info.has_default)
+        assert len(with_default) == 0  # Required fields have no defaults here
 
     def test_marker_collect_guard_on_base_class(self):
         with pytest.raises(TypeError, match="Marker subclass"):
@@ -677,6 +832,55 @@ class TestRegistry:
             names[cls.__name__] = list(cls.required.keys())
         assert names == {"A": ["x"], "B": ["y"]}
 
+    def test_abstract_intermediate_falls_through(self):
+        class Base(Registry):
+            pass
+
+        class Middle(Base, abstract=True):
+            pass
+
+        class Leaf(Middle):
+            pass
+
+        assert Leaf in Base.subclasses()
+        assert not hasattr(Middle, "_registry") or "_registry" not in vars(Middle)
+
+    def test_multiple_registry_bases(self):
+        class RegA(Registry):
+            pass
+
+        class RegB(Registry):
+            pass
+
+        class Both(RegA, RegB):
+            pass
+
+        assert Both in RegA.subclasses()
+        assert Both in RegB.subclasses()
+
+    def test_all_proxy_repr(self):
+        class Base(Registry):
+            pass
+
+        class _Sub1(Base):
+            pass
+
+        class _Sub2(Base):
+            pass
+
+        proxy = Base.all
+        r = repr(proxy)
+        assert "Base" in r
+        assert "2 subclasses" in r
+
+    def test_collect_rejects_instance(self):
+        with pytest.raises(TypeError, match="expects a class"):
+            Required.collect("not a class")  # type: ignore[arg-type]
+
+    def test_collect_markers_rejects_instance(self):
+        with pytest.raises(TypeError, match="expects a class"):
+            Required.collect_markers("not a class")  # type: ignore[arg-type]
+
 
 # ===================================================================
 # Multiple groups
@@ -700,6 +904,36 @@ class TestMultipleGroups:
         assert "hook" in M.on_save
         assert M.fields["name"].get("searchable").boost == 2.0
         assert M.methods["hook"].get("on_save").priority == 1
+
+    def test_combine_creates_single_mixin(self):
+        combined = MarkerGroup.combine(DB, Search, Validation, Lifecycle)
+
+        class M(combined):
+            id: Annotated[int, DB.PrimaryKey()]
+            name: Annotated[str, Validation.Required(), Search.Searchable(boost=2.0)]
+
+            @OnSave(priority=1)
+            def hook(self):
+                pass
+
+        collector.invalidate(M)
+        assert "id" in M.primary_key
+        assert "name" in M.required
+        assert "name" in M.searchable
+        assert "hook" in M.on_save
+        assert M.fields["name"].get("searchable").boost == 2.0
+
+    def test_combine_has_base_descriptors(self):
+        combined = MarkerGroup.combine(DB, Validation)
+
+        class M(combined):
+            id: Annotated[int, DB.PrimaryKey()]
+            name: str
+
+        collector.invalidate(M)
+        assert "id" in M.fields
+        assert "name" in M.fields
+        assert "id" in M.members
 
 
 # ===================================================================
@@ -804,3 +1038,287 @@ class TestSlotCollisionPrevention:
         collector.invalidate(_M)
         info = _M.table_name["x"]
         assert info.get("table_name").name == "my_table"
+
+
+# ===================================================================
+# MemberInfo.get_marker
+# ===================================================================
+
+
+class TestMemberInfoGetMarker:
+    def test_get_marker_returns_instance(self):
+        inst = Required()
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get_marker("required") is inst
+
+    def test_get_marker_raises_on_missing(self):
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[Required()])
+        with pytest.raises(KeyError, match="max_length"):
+            info.get_marker("max_length")
+
+    def test_get_marker_raises_on_empty_markers(self):
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[])
+        with pytest.raises(KeyError, match="required"):
+            info.get_marker("required")
+
+    def test_get_marker_with_schema_params(self):
+        inst = MaxLen(limit=50)
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        marker = info.get_marker("max_length")
+        assert marker.limit == 50
+
+    def test_has_accepts_marker_class(self):
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[Required()])
+        assert info.has(Required) is True
+        assert info.has(MaxLen) is False
+
+    def test_get_accepts_marker_class(self):
+        inst = MaxLen(limit=50)
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get(MaxLen) is inst
+        assert info.get(Required) is None
+
+    def test_get_marker_accepts_marker_class(self):
+        inst = Required()
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get_marker(Required) is inst
+        with pytest.raises(KeyError):
+            info.get_marker(MaxLen)
+
+    def test_get_all_accepts_marker_class(self):
+        inst = Required()
+        info = MemberInfo(name="x", kind=MemberKind.FIELD, markers=[inst])
+        assert info.get_all(Required) == [inst]
+        assert info.get_all(MaxLen) == []
+
+
+# ===================================================================
+# collect_markers
+# ===================================================================
+
+
+class TestCollectMarkers:
+    def test_returns_collect_result(self):
+        class M(DB.mixin, Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            age: int = 0
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert isinstance(result, CollectResult)
+
+    def test_returns_marker_instances_not_member_info(self):
+        class M(DB.mixin, Validation.mixin):
+            name: Annotated[str, Validation.Required(), Validation.MaxLen(limit=100)]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert "name" in result
+        # Value is MarkerInstance, not MemberInfo
+        marker = result["name"]
+        assert marker.marker_name == "required"
+
+    def test_schema_params_accessible_directly(self):
+        class M(Search.mixin):
+            name: Annotated[str, Search.Searchable(boost=2.5)]
+
+        collector.invalidate(M)
+        result = Searchable.collect_markers(M)
+        assert result["name"].boost == 2.5
+        assert result["name"].analyzer == "standard"
+
+    def test_only_matching_marker_returned(self):
+        class M(DB.mixin, Validation.mixin):
+            id: Annotated[int, DB.PrimaryKey()]
+            name: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert "name" in result
+        assert "id" not in result
+
+    def test_guard_on_base_marker(self):
+        with pytest.raises(TypeError, match="Marker subclass"):
+            Marker.collect_markers(object)
+
+    def test_empty_result_when_no_matches(self):
+        class M(DB.mixin):
+            id: Annotated[int, DB.PrimaryKey()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert len(result) == 0
+
+    def test_methods_included(self):
+        class M(Lifecycle.mixin):
+            @OnSave(priority=10)
+            def hook(self):
+                pass
+
+        collector.invalidate(M)
+        result = OnSave.collect_markers(M)
+        assert "hook" in result
+        assert result["hook"].priority == 10
+
+
+# ===================================================================
+# CollectResult
+# ===================================================================
+
+
+class TestCollectResult:
+    def test_get_one_with_single_entry(self):
+        class M(DB.mixin, Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        name, marker = result.get_one()
+        assert name == "name"
+        assert marker.marker_name == "required"
+
+    def test_get_one_raises_on_empty(self):
+        result = CollectResult()
+        with pytest.raises(ValueError, match="Expected exactly 1"):
+            result.get_one()
+
+    def test_get_one_raises_on_multiple(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        with pytest.raises(ValueError, match="Expected exactly 1"):
+            result.get_one()
+
+    def test_get_one_label_in_error(self):
+        result = CollectResult()
+        with pytest.raises(ValueError, match="initial"):
+            result.get_one(label="initial")
+
+    def test_get_first_returns_first(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        name, _marker = result.get_first()
+        assert name in result
+
+    def test_get_first_raises_on_empty(self):
+        result = CollectResult()
+        with pytest.raises(ValueError, match="Expected at least 1"):
+            result.get_first()
+
+    def test_get_first_label_in_error(self):
+        result = CollectResult()
+        with pytest.raises(ValueError, match="final"):
+            result.get_first(label="final")
+
+    def test_get_one_name(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert result.get_one_name() == "name"
+
+    def test_get_first_name(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert result.get_first_name() in result
+
+    def test_get_one_truncates_large_key_list(self):
+        # Build a CollectResult with 15 entries
+        result = CollectResult({f"field_{i}": Required() for i in range(15)})
+        with pytest.raises(ValueError, match="5 more"):
+            result.get_one()
+
+    def test_sorted_by(self):
+        collector.invalidate(_SMachineFull)
+        transitions = _SMTransition.collect_markers(_SMachineFull)
+        # Transitions have a 'target' attribute
+        sorted_items = transitions.sorted_by("target")
+        targets = [marker.target for _, marker in sorted_items]
+        assert targets == sorted(targets)
+
+    def test_sorted_by_reverse(self):
+        collector.invalidate(_SMachineFull)
+        transitions = _SMTransition.collect_markers(_SMachineFull)
+        sorted_items = transitions.sorted_by("target", reverse=True)
+        targets = [marker.target for _, marker in sorted_items]
+        assert targets == sorted(targets, reverse=True)
+
+    def test_where_filters_by_predicate(self):
+        all_states = _SMState.collect_markers(_SMachine)
+        assert len(all_states) == 3
+
+        initials = all_states.where(lambda m: m.initial)
+        assert isinstance(initials, CollectResult)
+        assert len(initials) == 1
+        assert "idle" in initials
+
+        finals = all_states.where(lambda m: m.final)
+        assert len(finals) == 1
+        assert "done" in finals
+
+        neither = all_states.where(lambda m: not m.initial and not m.final)
+        assert len(neither) == 1
+        assert "running" in neither
+
+    def test_where_chained_with_get_one(self):
+        name, marker = _SMState.collect_markers(_SMachine).where(lambda m: m.initial).get_one()
+        assert name == "idle"
+        assert marker.initial is True
+
+    def test_names_method(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        assert set(result.names()) == {"name", "email"}
+
+    def test_markers_method(self):
+        class M(Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+
+        collector.invalidate(M)
+        result = Required.collect_markers(M)
+        markers_list = result.values_list()
+        assert len(markers_list) == 1
+        assert markers_list[0].marker_name == "required"
+
+    def test_where_returns_empty_on_no_match(self):
+        result = _SMState.collect_markers(_SMachineNoInitial).where(lambda m: m.initial)
+        assert len(result) == 0
+
+    def test_real_world_state_machine_pattern(self):
+        """Test the full pattern from the real-world usage example."""
+        # Collect states — no None checks needed
+        states = _SMState.collect_markers(_SMachineFull)
+        state_names = states.names()
+        assert set(state_names) == {"idle", "running", "done", "error"}
+
+        # get_one for initial state
+        initial_name, _ = states.where(lambda m: m.initial).get_one()
+        assert initial_name == "idle"
+
+        # Multiple finals
+        finals = states.where(lambda m: m.final)
+        assert set(finals.keys()) == {"done", "error"}
+
+        # Transitions — direct marker param access
+        transitions = _SMTransition.collect_markers(_SMachineFull)
+        assert set(transitions.keys()) == {"start", "finish", "fail"}
+        assert transitions["start"].source == ["idle"]
+        assert transitions["start"].target == "running"
+        assert transitions["finish"].target == "done"
+        assert transitions["fail"].target == "error"
