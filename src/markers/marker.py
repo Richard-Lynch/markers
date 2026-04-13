@@ -36,20 +36,16 @@ if sys.version_info >= (3, 14):
     import annotationlib
 
 
-def _annotations_from_namespace(namespace: dict) -> dict[str, Any]:
-    """Extract own annotations from a class namespace dict.
+def _get_own_class_annotations(cls: type) -> dict[str, Any]:
+    """Get annotations defined directly on *cls* (not inherited), as strings.
 
-    On Python 3.14.4+, the namespace may contain __annotate__ (a callable)
-    instead of __annotations__ (a dict) due to PEP 749 deferred evaluation.
+    On Python 3.14+ uses annotationlib.get_annotations with STRING format
+    to avoid evaluating forward references. On older versions reads
+    __annotations__ from the class __dict__.
     """
-    ann = namespace.get("__annotations__")
-    if ann is not None:
-        return ann
     if sys.version_info >= (3, 14):
-        annotate_fn = namespace.get("__annotate__")
-        if annotate_fn is not None:
-            return annotate_fn(annotationlib.Format.STRING)
-    return {}
+        return annotationlib.get_annotations(cls, format=annotationlib.Format.STRING)
+    return dict(vars(cls).get("__annotations__", {}))
 
 
 __all__ = ["Marker"]
@@ -74,6 +70,11 @@ class MarkerMeta(type):
         # Determine marker name — only set if explicitly provided or this is a leaf
         mark_name = namespace.pop("mark", None)
 
+        # Create the class first so annotations are accessible via the type
+        # (on Python 3.14.4+ with PEP 749, annotations may not be in the
+        # namespace dict at all — they're only available on the created class).
+        cls = super().__new__(mcs, name, bases, namespace)
+
         # Collect schema annotations from this class AND parent markers
         schema_annotations: dict[str, Any] = {}
         schema_defaults: dict[str, Any] = {}
@@ -87,16 +88,21 @@ class MarkerMeta(type):
             schema_annotations.update(base_schema)
             schema_defaults.update(base_defaults)
 
-        # Add this class's own annotations
-        own_annotations = _annotations_from_namespace(namespace)
+        # Add this class's own annotations (read from the created class)
+        own_annotations = _get_own_class_annotations(cls)
         for k, v in own_annotations.items():
             if k not in _MARKER_INTERNAL and not k.startswith("_"):
                 schema_annotations[k] = v
 
-        # Extract defaults from namespace
+        # Extract defaults from class vars
         for k in list(schema_annotations.keys()):
-            if k in namespace:
-                schema_defaults[k] = namespace.pop(k)
+            if k in vars(cls):
+                schema_defaults[k] = vars(cls)[k]
+                # Remove from class dict so schema fields don't shadow descriptors
+                try:
+                    delattr(cls, k)
+                except AttributeError:
+                    pass
 
         # Build pydantic model if there are schema fields
         if schema_annotations:
@@ -108,14 +114,6 @@ class MarkerMeta(type):
             schema_model = type(f"{name}Params", (BaseModel,), model_ns)
         else:
             schema_model = None
-
-        # Clean annotations so they don't interfere with the class
-        if "__annotations__" in namespace:
-            namespace["__annotations__"] = {
-                k: v for k, v in namespace["__annotations__"].items() if k not in schema_annotations
-            }
-
-        cls = super().__new__(mcs, name, bases, namespace)
 
         # If no explicit mark name, default to lowercased class name
         if mark_name is None:
