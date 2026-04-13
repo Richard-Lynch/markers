@@ -457,6 +457,41 @@ class TestCollectionMethods:
         collector.invalidate(Child)
         assert Child.methods["hook"].owner is Base
 
+    def test_classmethod_with_marker_collected(self):
+        class M(Lifecycle.mixin):
+            @OnSave(priority=5)
+            @classmethod
+            def cls_hook(cls):
+                pass
+
+        collector.invalidate(M)
+        assert "cls_hook" in M.methods
+        assert M.methods["cls_hook"].get("on_save").priority == 5
+
+    def test_staticmethod_with_marker_collected(self):
+        class M(Lifecycle.mixin):
+            @OnSave(priority=3)
+            @staticmethod
+            def static_hook():
+                pass
+
+        collector.invalidate(M)
+        assert "static_hook" in M.methods
+        assert M.methods["static_hook"].get("on_save").priority == 3
+
+    def test_marker_then_classmethod_collected(self):
+        """Marker applied before @classmethod (outer decorator)."""
+
+        class M(Lifecycle.mixin):
+            @classmethod
+            @OnSave(priority=7)
+            def hook(cls):
+                pass
+
+        collector.invalidate(M)
+        assert "hook" in M.methods
+        assert M.methods["hook"].get("on_save").priority == 7
+
 
 # ===================================================================
 # Collection — marker filtering

@@ -93,10 +93,28 @@ class MarkerInstance:
 
         The decorated function's type signature is preserved — type checkers
         will see the original return type, not ``MarkerInstance``.
+
+        Supports decorating ``classmethod``, ``staticmethod``, and
+        ``property`` descriptors — markers are attached to the inner function.
         """
+        # Unwrap descriptor wrappers to attach markers to the inner function
+        if isinstance(fn, (classmethod, staticmethod)):
+            inner = fn.__func__
+            markers: list[MarkerInstance] = list(getattr(inner, "_markers", []))
+            markers.append(self)
+            inner._markers = markers  # type: ignore[attr-defined]
+            return fn
+        if isinstance(fn, property):
+            inner = fn.fget  # type: ignore[assignment]
+            markers = list(getattr(inner, "_markers", []))
+            markers.append(self)
+            inner._markers = markers  # type: ignore[attr-defined]
+            return fn  # type: ignore[return-value]
         if not callable(fn):
-            raise TypeError(f"MarkerInstance '{self._marker_name}' expected a callable, got {type(fn).__name__}")
-        markers: list[MarkerInstance] = list(getattr(fn, "_markers", []))
+            raise TypeError(
+                f"MarkerInstance '{self._marker_name}' expected a callable, got {type(fn).__name__}"
+            )
+        markers = list(getattr(fn, "_markers", []))
         markers.append(self)
         fn._markers = markers  # type: ignore[attr-defined]
         return fn
