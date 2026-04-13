@@ -237,8 +237,11 @@ class Marker(metaclass=MarkerMeta):
     _schema_defaults: dict[str, Any]
 
     @classmethod
-    def collect(cls, target: type) -> dict[str, MemberInfo]:
+    def collect(cls, target: type) -> CollectResult[MemberInfo]:
         """Collect all members carrying this marker from target class.
+
+        Returns a ``CollectResult[MemberInfo]`` with ``.where()``,
+        ``.get_one()``, ``.get_first()``, ``.sorted_by()`` etc.
 
         Must be called on a concrete Marker subclass, not on Marker itself.
         """
@@ -248,7 +251,7 @@ class Marker(metaclass=MarkerMeta):
             )
         if not isinstance(target, type):
             raise TypeError(f"collect() expects a class, got {type(target).__name__} instance")
-        return collector.filter(target, cls._mark_name)
+        return CollectResult(collector.filter(target, cls._mark_name))
 
     @classmethod
     def collect_markers(cls, target: type) -> CollectResult:

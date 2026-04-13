@@ -546,6 +546,23 @@ class TestMarkerFiltering:
         assert "name" in result
         assert "age" not in result
 
+    def test_collect_returns_collect_result(self):
+        class M(DB.mixin, Validation.mixin):
+            name: Annotated[str, Validation.Required()]
+            email: Annotated[str, Validation.Required()]
+            age: int = 0
+
+        collector.invalidate(M)
+        result = Required.collect(M)
+        assert isinstance(result, CollectResult)
+        # CollectResult methods work on MemberInfo values
+        name, info = result.get_first()
+        assert isinstance(info, MemberInfo)
+        assert info.has(Required)
+        # where() works with MemberInfo predicate
+        with_default = result.where(lambda info: info.has_default)
+        assert len(with_default) == 0  # Required fields have no defaults here
+
     def test_marker_collect_guard_on_base_class(self):
         with pytest.raises(TypeError, match="Marker subclass"):
             Marker.collect(object)
