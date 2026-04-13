@@ -24,12 +24,33 @@ Intermediate base markers for shared schema fields::
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from markers._types import MarkerInstance, MemberInfo
 from markers.core import collector
+
+if sys.version_info >= (3, 14):
+    import annotationlib
+
+
+def _annotations_from_namespace(namespace: dict) -> dict[str, Any]:
+    """Extract own annotations from a class namespace dict.
+
+    On Python 3.14.4+, the namespace may contain __annotate__ (a callable)
+    instead of __annotations__ (a dict) due to PEP 749 deferred evaluation.
+    """
+    ann = namespace.get("__annotations__")
+    if ann is not None:
+        return ann
+    if sys.version_info >= (3, 14):
+        annotate_fn = namespace.get("__annotate__")
+        if annotate_fn is not None:
+            return annotate_fn(annotationlib.Format.STRING)
+    return {}
+
 
 __all__ = ["Marker"]
 
@@ -67,7 +88,7 @@ class MarkerMeta(type):
             schema_defaults.update(base_defaults)
 
         # Add this class's own annotations
-        own_annotations = namespace.get("__annotations__", {})
+        own_annotations = _annotations_from_namespace(namespace)
         for k, v in own_annotations.items():
             if k not in _MARKER_INTERNAL and not k.startswith("_"):
                 schema_annotations[k] = v

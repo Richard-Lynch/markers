@@ -14,10 +14,19 @@ from markers._types import MISSING, MarkerInstance, MemberInfo, MemberKind
 # handles the deferred evaluation protocol (PEP 749). On older versions,
 # fall back to reading __annotations__ directly.
 if sys.version_info >= (3, 14):
-    from annotationlib import get_annotations as _get_own_annotations
+    import annotationlib
+
+    def _get_own_annotations(cls: type) -> dict[str, object]:
+        """Get own-class annotations using annotationlib (3.14+).
+
+        Uses STRING format to avoid evaluating annotations, since we only
+        need the annotation keys to determine field ownership.
+        """
+        return annotationlib.get_annotations(cls, format=annotationlib.Format.STRING)
+
 else:
 
-    def _get_own_annotations(cls: type, **kwargs: object) -> dict[str, object]:  # type: ignore[misc]
+    def _get_own_annotations(cls: type) -> dict[str, object]:  # type: ignore[misc]
         return getattr(cls, "__annotations__", {})
 
 
