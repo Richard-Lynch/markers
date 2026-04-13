@@ -300,6 +300,31 @@ class TestMarkerInstanceAttributes:
         inst = Required()
         assert repr(inst) == "required()"
 
+    def test_as_dict_with_schema(self):
+        inst = Searchable(boost=2.5)
+        d = inst.as_dict()
+        assert d == {"boost": 2.5, "analyzer": "standard"}
+
+    def test_as_dict_without_schema(self):
+        inst = Required()
+        assert inst.as_dict() == {}
+
+    def test_eq_same_marker_same_params(self):
+        assert MaxLen(limit=100) == MaxLen(limit=100)
+
+    def test_eq_same_marker_different_params(self):
+        assert MaxLen(limit=100) != MaxLen(limit=200)
+
+    def test_eq_different_marker(self):
+        assert Required() != Unique()
+
+    def test_eq_not_marker_instance(self):
+        assert Required() != "required"
+
+    def test_not_hashable(self):
+        with pytest.raises(TypeError):
+            hash(Required())
+
 
 # ===================================================================
 # MarkerGroup

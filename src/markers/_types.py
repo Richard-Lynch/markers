@@ -137,11 +137,25 @@ class MarkerInstance:
             return kwargs[key]
         raise AttributeError(f"MarkerInstance '{self._marker_name}' has no parameter '{key}'")
 
-    def __repr__(self) -> str:
+    def as_dict(self) -> dict[str, Any]:
+        """Return all marker parameters as a plain dict.
+
+        Uses the pydantic model's ``model_dump()`` if available (includes
+        defaults), otherwise returns the raw kwargs.
+        """
         if self._params is not None:
-            data = self._params.model_dump()
-        else:
-            data = self._kwargs
+            return self._params.model_dump()
+        return dict(self._kwargs)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, MarkerInstance):
+            return NotImplemented
+        return self._marker_name == other._marker_name and self.as_dict() == other.as_dict()
+
+    __hash__ = None  # type: ignore[assignment]  # mutable — unhashable
+
+    def __repr__(self) -> str:
+        data = self.as_dict()
         parts = [f"{k}={v!r}" for k, v in data.items()]
         return f"{self._marker_name}({', '.join(parts)})"
 
