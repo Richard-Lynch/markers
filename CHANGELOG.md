@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-13
+
+### Added
+
+- Python 3.14 support (PEP 749 deferred annotations)
+- Python 3.14 in CI test matrix, tox env list, and pyproject.toml classifiers
+
+### Changed
+
+- `MarkerMeta.__new__` restructured to read annotations from the created class rather than the namespace dict, for compatibility with Python 3.14.4+ where `__annotations__` is no longer populated in the namespace
+- `Collector.collect` uses `annotationlib.get_annotations(format=STRING)` on Python 3.14+ instead of reading `__annotations__` directly
+- CI lint, typecheck, and coverage jobs now default to Python 3.14
+
 ## [0.1.1] - 2026-04-13
 
 ### Changed

@@ -20,7 +20,7 @@ make test
 # With coverage
 make test:cov
 
-# Full matrix (Python 3.10–3.13)
+# Full matrix (Python 3.10–3.14)
 tox
 ```
 
@@ -46,13 +46,23 @@ make typecheck
 make check
 ```
 
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/):
+
+- **Patch** (0.1.x): Bug fixes, documentation, CI changes
+- **Minor** (0.x.0): New features, new Python version support, backwards-compatible changes
+- **Major** (x.0.0): Breaking API changes
+
 ## Release process
 
-1. Update version in `pyproject.toml`
-2. Update `CHANGELOG.md`
-3. Commit: `git commit -am "Release v0.x.y"`
-4. Tag: `git tag v0.x.y`
-5. Push: `git push origin main --tags`
+`main` is protected — all changes go through pull requests.
+
+1. Create a release branch: `git checkout -b release/v0.x.y`
+2. Update version in `pyproject.toml`
+3. Update `CHANGELOG.md`
+4. Open a PR, get CI green, merge
+5. Tag main: `git checkout main && git pull && git tag v0.x.y && git push origin v0.x.y`
 
 The GitHub Actions release workflow will automatically:
 - Run all checks
