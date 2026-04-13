@@ -29,7 +29,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from markers._types import MarkerInstance, MemberInfo
+from markers._types import CollectResult, MarkerInstance, MemberInfo
 from markers.core import collector
 
 if sys.version_info >= (3, 14):
@@ -247,6 +247,43 @@ class Marker(metaclass=MarkerMeta):
                 "collect() must be called on a Marker subclass, e.g. Required.collect(User), not Marker.collect(User)"
             )
         return collector.filter(target, cls._mark_name)
+
+    @classmethod
+    def collect_markers(cls, target: type) -> CollectResult:
+        """Collect all members carrying this marker, returning the markers directly.
+
+        Like ``collect()`` but returns ``CollectResult`` mapping member names
+        to their ``MarkerInstance`` instead of ``MemberInfo``. This eliminates
+        the need for ``.get()`` calls and ``None`` checks when you only need
+        the marker parameters.
+
+        Must be called on a concrete Marker subclass, not on Marker itself.
+
+        Usage::
+
+            # Instead of:
+            for name, info in State.collect(cls).items():
+                marker = info.get("state")
+                assert marker is not None
+                if marker.initial: ...
+
+            # Write:
+            for name, marker in State.collect_markers(cls).items():
+                if marker.initial: ...
+
+            # With filtering and uniqueness:
+            name, marker = State.collect_markers(cls).where(lambda m: m.initial).get_one()
+        """
+        if cls is Marker:
+            raise TypeError(
+                "collect_markers() must be called on a Marker subclass, "
+                "e.g. Required.collect_markers(User), not Marker.collect_markers(User)"
+            )
+        mark_name = cls._mark_name
+        members = collector.filter(target, mark_name)
+        return CollectResult(
+            {name: info.get_marker(mark_name) for name, info in members.items()}
+        )
 
     @classmethod
     def invalidate(cls, target: type) -> None:

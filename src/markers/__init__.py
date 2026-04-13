@@ -60,13 +60,14 @@ Type checking:
       docstring for typed alternatives.
 """
 
-from markers._types import MISSING, MarkerInstance, MemberInfo, MemberKind
+from markers._types import MISSING, CollectResult, MarkerInstance, MemberInfo, MemberKind
 from markers.groups import MarkerGroup
 from markers.marker import Marker
 from markers.registry import Registry
 
 __all__ = [
     "MISSING",
+    "CollectResult",
     "Marker",
     "MarkerGroup",
     "MarkerInstance",

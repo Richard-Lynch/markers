@@ -4,7 +4,7 @@ from typing import Any, ClassVar, TypeVar
 from pydantic import BaseModel
 from typing_extensions import dataclass_transform
 
-from markers._types import MemberInfo
+from markers._types import CollectResult, MemberInfo
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -26,5 +26,7 @@ class Marker(metaclass=MarkerMeta):
     def __getattr__(self, key: str) -> Any: ...
     @classmethod
     def collect(cls, target: type) -> dict[str, MemberInfo]: ...
+    @classmethod
+    def collect_markers(cls, target: type) -> CollectResult: ...
     @classmethod
     def invalidate(cls, target: type) -> None: ...

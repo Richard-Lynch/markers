@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
-__all__ = ["MISSING", "MarkerInstance", "MemberInfo", "MemberKind"]
+__all__ = ["MISSING", "CollectResult", "MarkerInstance", "MemberInfo", "MemberKind"]
 
 MISSING = object()
 
@@ -111,6 +111,74 @@ class MarkerInstance:
         return f"{self._marker_name}({', '.join(parts)})"
 
 
+class CollectResult(dict):
+    """Dict subclass returned by ``Marker.collect_markers()``.
+
+    Maps member names to their ``MarkerInstance`` for the collected marker.
+    Provides convenience methods for common patterns like uniqueness checks
+    and predicate filtering.
+
+    Usage::
+
+        results = SM.State.collect_markers(cls)
+
+        # Iterate with full marker access (no None checks)
+        for name, marker in results.items():
+            if marker.initial: ...
+
+        # Assert exactly one match
+        name, marker = results.where(lambda m: m.initial).get_one()
+
+        # Assert at least one match
+        name, marker = results.where(lambda m: m.final).get_first()
+
+        # Filter by predicate
+        finals = results.where(lambda m: m.final)
+    """
+
+    def get_one(self, label: str = "") -> tuple[str, MarkerInstance]:
+        """Return the single ``(name, marker)`` entry.
+
+        Raises ``ValueError`` if there are zero or more than one entries.
+        The optional *label* is included in the error message for context.
+        """
+        if len(self) != 1:
+            ctx = f" for {label!r}" if label else ""
+            raise ValueError(
+                f"Expected exactly 1 result{ctx}, found {len(self)}: {list(self.keys())}"
+            )
+        name = next(iter(self))
+        return name, self[name]
+
+    def get_first(self) -> tuple[str, MarkerInstance]:
+        """Return the first ``(name, marker)`` entry.
+
+        Raises ``ValueError`` if the result is empty.
+        """
+        if not self:
+            raise ValueError("Expected at least 1 result, found 0")
+        name = next(iter(self))
+        return name, self[name]
+
+    def where(self, predicate: Callable[[MarkerInstance], bool]) -> CollectResult:
+        """Filter entries by a predicate on the ``MarkerInstance``.
+
+        Returns a new ``CollectResult`` containing only entries where
+        ``predicate(marker)`` returns ``True``.
+        """
+        return CollectResult(
+            {name: marker for name, marker in self.items() if predicate(marker)}
+        )
+
+    def names(self) -> list[str]:
+        """Return all member names as a list."""
+        return list(self.keys())
+
+    def markers(self) -> list[MarkerInstance]:
+        """Return all ``MarkerInstance`` objects as a list."""
+        return list(self.values())
+
+
 class MemberInfo:
     """Metadata about a single class member (field or method).
 
@@ -184,6 +252,18 @@ class MemberInfo:
 
     def get(self, marker_name: str) -> MarkerInstance | None:
         return next((m for m in self.markers if m._marker_name == marker_name), None)
+
+    def get_marker(self, marker_name: str) -> MarkerInstance:
+        """Get the ``MarkerInstance`` matching the name, or raise.
+
+        Like ``.get()`` but raises ``KeyError`` instead of returning ``None``.
+        Use when you know the marker must be present (e.g. after filtering
+        by that marker via ``collect()``).
+        """
+        result = next((m for m in self.markers if m._marker_name == marker_name), None)
+        if result is None:
+            raise KeyError(f"Member {self.name!r} has no marker {marker_name!r}")
+        return result
 
     def get_all(self, marker_name: str) -> list[MarkerInstance]:
         return [m for m in self.markers if m._marker_name == marker_name]
