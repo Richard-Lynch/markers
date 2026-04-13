@@ -584,7 +584,7 @@ class TestMarkerFiltering:
         result = Required.collect(M)
         assert isinstance(result, CollectResult)
         # CollectResult methods work on MemberInfo values
-        name, info = result.get_first()
+        _name, info = result.get_first()
         assert isinstance(info, MemberInfo)
         assert info.has(Required)
         # where() works with MemberInfo predicate
@@ -906,9 +906,9 @@ class TestMultipleGroups:
         assert M.methods["hook"].get("on_save").priority == 1
 
     def test_combine_creates_single_mixin(self):
-        Combined = MarkerGroup.combine(DB, Search, Validation, Lifecycle)
+        combined = MarkerGroup.combine(DB, Search, Validation, Lifecycle)
 
-        class M(Combined):
+        class M(combined):
             id: Annotated[int, DB.PrimaryKey()]
             name: Annotated[str, Validation.Required(), Search.Searchable(boost=2.0)]
 
@@ -924,9 +924,9 @@ class TestMultipleGroups:
         assert M.fields["name"].get("searchable").boost == 2.0
 
     def test_combine_has_base_descriptors(self):
-        Combined = MarkerGroup.combine(DB, Validation)
+        combined = MarkerGroup.combine(DB, Validation)
 
-        class M(Combined):
+        class M(combined):
             id: Annotated[int, DB.PrimaryKey()]
             name: str
 

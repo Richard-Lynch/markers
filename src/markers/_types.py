@@ -13,6 +13,7 @@ _M = TypeVar("_M")
 
 __all__ = ["MISSING", "CollectResult", "MarkerInstance", "MemberInfo", "MemberKind"]
 
+
 class _MissingSentinel:
     """Sentinel for fields with no default value."""
 
@@ -112,9 +113,7 @@ class MarkerInstance:
             inner._markers = markers  # type: ignore[attr-defined]
             return fn  # type: ignore[return-value]
         if not callable(fn):
-            raise TypeError(
-                f"MarkerInstance '{self._marker_name}' expected a callable, got {type(fn).__name__}"
-            )
+            raise TypeError(f"MarkerInstance '{self._marker_name}' expected a callable, got {type(fn).__name__}")
         markers = list(getattr(fn, "_markers", []))
         markers.append(self)
         fn._markers = markers  # type: ignore[attr-defined]
