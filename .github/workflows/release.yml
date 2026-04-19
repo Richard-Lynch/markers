@@ -113,11 +113,11 @@ jobs:
 
             # Purge shields.io cache (convert image URL to purge API URL)
             purge_path=$(echo "$url" | sed 's|https://img.shields.io/|https://purge.shields.io/|')
-            curl -sX POST "$purge_path"
+            curl -sX POST "$purge_path" || echo "Warning: failed to purge shields.io cache for $url"
 
             # Purge GitHub camo cache using the ETag
-            etag=$(curl -sI "$url" | grep -i etag | tr -d '"\r' | awk '{print $2}')
+            etag=$(curl -sI "$url" | grep -i etag | tr -d '"\r' | awk '{print $2}') || true
             if [ -n "$etag" ]; then
-              curl -sX PURGE "https://camo.githubusercontent.com/$etag"
+              curl -sX PURGE "https://camo.githubusercontent.com/$etag" || echo "Warning: failed to purge camo cache for $url"
             fi
           done
